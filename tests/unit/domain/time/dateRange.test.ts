@@ -23,7 +23,7 @@ import { formatSiteDate, parseSiteDate } from '../../../../src/domain/time/siteD
 
 const d = parseSiteDate;
 const r = (from: string, to: string) => dateRange(d(from), d(to));
-const show = (range: { from: number; to: number }) => `${formatDateRange(range as never)}`;
+const show = formatDateRange;
 
 describe('dateRange', () => {
   it('holds both ends', () => {
