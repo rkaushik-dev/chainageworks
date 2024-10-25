@@ -155,3 +155,25 @@ export function splitRangeAt(range: ChainageRange, station: Station): ChainageRa
     { from: station, to: range.to },
   ];
 }
+
+/**
+ * The stretches two lists of ranges have in common.
+ *
+ * Both sides are normalised first, so a caller can pass overlapping ranges
+ * without the intersection counting the shared length twice.
+ */
+export function intersectRangeLists(
+  left: readonly ChainageRange[],
+  right: readonly ChainageRange[],
+): ChainageRange[] {
+  const a = unionRanges(left);
+  const b = unionRanges(right);
+  const out: ChainageRange[] = [];
+  for (const one of a) {
+    for (const other of b) {
+      const shared = intersectRanges(one, other);
+      if (shared !== null) out.push(shared);
+    }
+  }
+  return unionRanges(out);
+}
