@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BadInputError } from '../../../../src/errors.js';
 import {
   addQuantities,
-  assertClaimable,
+  assertBillableLumpSum,
   compareQuantities,
   formatQuantity,
   isNegativeQuantity,
@@ -201,25 +201,28 @@ describe('parseQuantity', () => {
   });
 });
 
-describe('assertClaimable', () => {
-  it('allows nothing and the whole of a lump sum', () => {
+describe('assertBillableLumpSum', () => {
+  it('allows exactly one sum', () => {
     expect(() => {
-      assertClaimable(quantity(0, 'sum'));
-    }).not.toThrow();
-    expect(() => {
-      assertClaimable(quantity(1, 'sum'));
+      assertBillableLumpSum(quantity(1, 'sum'));
     }).not.toThrow();
   });
 
-  it('refuses part of a lump sum', () => {
+  it('refuses a bill that carries a lump item more than once', () => {
     expect(() => {
-      assertClaimable(quantity(0.5, 'sum'));
-    }).toThrow(/whole or not at all/);
+      assertBillableLumpSum(quantity(3, 'sum'));
+    }).toThrow(/exactly one sum/);
+    expect(() => {
+      assertBillableLumpSum(quantity(0, 'sum'));
+    }).toThrow(/exactly one sum/);
   });
 
-  it('lets a measurable unit hold anything', () => {
+  it('says nothing about a measurable unit', () => {
     expect(() => {
-      assertClaimable(quantity(0.5, 'm3'));
+      assertBillableLumpSum(quantity(0.5, 'm3'));
+    }).not.toThrow();
+    expect(() => {
+      assertBillableLumpSum(quantity(4000, 'm2'));
     }).not.toThrow();
   });
 });

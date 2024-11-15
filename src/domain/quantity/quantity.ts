@@ -141,12 +141,15 @@ export function parseQuantity(text: string): Quantity {
 }
 
 /**
- * A lump sum has no measurable quantity, so the only amounts it may carry are
- * nothing and the whole of it.
+ * A lump sum is billed as exactly one of itself.
+ *
+ * This is about the BILLED quantity, not the earned one. A lump item earns
+ * through its rule of credit and can sit at any fraction part way through, but
+ * a bill that carries three sums of the same lump item has been written wrong.
  */
-export function assertClaimable(q: Quantity): void {
-  if (!isMeasurable(q.unit) && q.milli !== 0 && q.milli !== MILLI) {
-    throw new BadInputError('a lump sum item is claimed whole or not at all', {
+export function assertBillableLumpSum(q: Quantity): void {
+  if (!isMeasurable(q.unit) && q.milli !== MILLI) {
+    throw new BadInputError('a lump sum item is billed as exactly one sum', {
       unit: q.unit,
       amount: quantityAmount(q),
     });
