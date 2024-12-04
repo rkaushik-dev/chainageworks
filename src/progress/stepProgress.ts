@@ -36,6 +36,8 @@ export interface StepProgressDetail {
   readonly withheldExtent: readonly ChainageRange[];
   /** Credited length over package length, as a fraction of one. */
   readonly fraction: number;
+  /** Built length over package length, whatever the gates say. */
+  readonly builtFraction: number;
 }
 
 function fractionOf(pkg: WorkPackage, extent: readonly ChainageRange[]): number {
@@ -107,6 +109,7 @@ export function stepProgressFor(
     heldPoints: gate.heldPoints,
     withheldExtent: withheld,
     fraction: fractionOf(pkg, credited),
+    builtFraction: fractionOf(pkg, built),
   };
 }
 
@@ -125,6 +128,18 @@ export function toStepProgress(details: readonly StepProgressDetail[]): StepProg
   return details.map((detail) => ({
     stepId: detail.stepId,
     fraction: percentFromBasisPoints(Math.round(detail.fraction * BASIS_POINTS_WHOLE)),
+  }));
+}
+
+/**
+ * The same shape, ignoring every gate. Running the rule of credit twice, once
+ * on this and once on the credited figures, is what puts a value on the work
+ * the inspections and the open reports are holding up.
+ */
+export function toBuiltProgress(details: readonly StepProgressDetail[]): StepProgress[] {
+  return details.map((detail) => ({
+    stepId: detail.stepId,
+    fraction: percentFromBasisPoints(Math.round(detail.builtFraction * BASIS_POINTS_WHOLE)),
   }));
 }
 
