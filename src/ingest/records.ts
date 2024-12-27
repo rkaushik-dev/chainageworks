@@ -1,17 +1,8 @@
-import { BadInputError } from '../errors.js';
-import type { ItemCode } from '../domain/bill/itemCode.js';
-import { tryParseItemCode } from '../domain/bill/itemCode.js';
-import { chainageRange } from '../domain/chainage/range.js';
-import type { Station } from '../domain/chainage/station.js';
-import { tryParseStation } from '../domain/chainage/station.js';
-import { quantity } from '../domain/quantity/quantity.js';
-import { parseUnit } from '../domain/quantity/unit.js';
 import type { MeasurementMethod, SurveyRecord } from '../domain/survey/record.js';
 import { buildSurveyRecord } from '../domain/survey/record.js';
-import type { SiteDate } from '../domain/time/siteDate.js';
-import { tryParseSiteDate } from '../domain/time/siteDate.js';
 import type { RowReader } from '../io/csv.js';
 import { parseCsv, readerFor } from '../io/csv.js';
+import { need, needCode, needDate, needExtent, needQuantity, optional } from './fields.js';
 import type { ImportIssue, ImportReport } from './report.js';
 import { checkColumns, issue, issueFrom } from './report.js';
 
@@ -73,54 +64,16 @@ export function importSurveyRecords(text: string): ImportReport<SurveyRecord> {
   return { imported, issues, rowsRead: table.rows.length };
 }
 
-function need(reader: RowReader, column: string): string {
-  const value = reader.require(column);
-  if (!value.ok) throw value.error;
-  return value.value;
-}
-
-function needCode(reader: RowReader, column: string): ItemCode {
-  const parsed = tryParseItemCode(need(reader, column));
-  if (!parsed.ok) {
-    throw new BadInputError(parsed.error.message, { line: reader.line, column });
-  }
-  return parsed.value;
-}
-
-function needStation(reader: RowReader, column: string): Station {
-  const parsed = tryParseStation(need(reader, column));
-  if (!parsed.ok) {
-    throw new BadInputError(parsed.error.message, { line: reader.line, column });
-  }
-  return parsed.value;
-}
-
-function needDate(reader: RowReader, column: string): SiteDate {
-  const parsed = tryParseSiteDate(need(reader, column));
-  if (!parsed.ok) {
-    throw new BadInputError(parsed.error.message, { line: reader.line, column });
-  }
-  return parsed.value;
-}
-
-function needNumber(reader: RowReader, column: string): number {
-  const value = Number(need(reader, column).replace(/,/g, ''));
-  if (!Number.isFinite(value)) {
-    throw new BadInputError(`the ${column} is not a number`, { line: reader.line, column });
-  }
-  return value;
-}
-
 function readRow(reader: RowReader, issues: ImportIssue[]): SurveyRecord {
-  const supersedes = reader.get('supersedes');
-  const note = reader.get('note');
+  const supersedes = optional(reader, 'supersedes');
+  const note = optional(reader, 'note');
   return buildSurveyRecord({
     id: need(reader, 'record'),
     packageId: need(reader, 'package'),
     code: needCode(reader, 'code'),
     stepId: need(reader, 'step'),
-    extent: chainageRange(needStation(reader, 'from'), needStation(reader, 'to')),
-    quantity: quantity(needNumber(reader, 'quantity'), parseUnit(need(reader, 'unit'))),
+    extent: needExtent(reader),
+    quantity: needQuantity(reader, 'quantity', 'unit'),
     measuredOn: needDate(reader, 'measured on'),
     bookedBy: need(reader, 'booked by'),
     method: readMethod(reader, issues),
@@ -134,7 +87,7 @@ function readRow(reader: RowReader, issues: ImportIssue[]): SurveyRecord {
  * the quantity, and the method only matters when somebody audits the row.
  */
 function readMethod(reader: RowReader, issues: ImportIssue[]): MeasurementMethod {
-  const text = reader.get('method');
+  const text = optional(reader, 'method');
   if (text === null) return 'tape';
   const cleaned = text
     .trim()
