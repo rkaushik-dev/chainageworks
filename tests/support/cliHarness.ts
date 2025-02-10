@@ -1,3 +1,4 @@
+import { BadInputError } from '../../src/errors.js';
 import type { CliDeps } from '../../src/cli/program.js';
 import { runCli } from '../../src/cli/program.js';
 import type { Job } from '../../src/store/job.js';
@@ -15,6 +16,8 @@ export interface HarnessOptions {
   readonly env?: Record<string, string | undefined>;
   /** Fail the load, to exercise the error path. */
   readonly loadError?: Error;
+  /** Files the import commands can read, keyed by the path they are given. */
+  readonly files?: Record<string, string>;
 }
 
 /**
@@ -41,6 +44,13 @@ export async function runCommand(
     saveJob: (toSave: Job, path: string) => {
       saved.push({ path, job: toSave });
       return Promise.resolve();
+    },
+    readText: (path: string) => {
+      const text = options.files?.[path];
+      if (text === undefined) {
+        return Promise.reject(new BadInputError('no such file', { path }));
+      }
+      return Promise.resolve(text);
     },
     out: (text: string) => out.push(text),
     err: (text: string) => err.push(text),

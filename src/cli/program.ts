@@ -9,16 +9,24 @@ import { formatQuantity } from '../domain/quantity/quantity.js';
 import { formatRate } from '../domain/money/rate.js';
 import { billAsAt } from '../domain/bill/revision.js';
 import { parseSiteDate } from '../domain/time/siteDate.js';
+import type { Service } from '../app/service.js';
 import {
   certificateFor,
   contextOf,
   createService,
   curveFor,
+  loadDiary,
+  loadHolidays,
+  loadNcrs,
+  loadRecords,
+  loadSignOffs,
   periodOf,
   progressFor,
   scheduleOf,
   stripFor,
 } from '../app/service.js';
+import type { ImportReport } from '../ingest/report.js';
+import { formatImportReport, hasErrors, rowsAccepted, rowsRejected } from '../ingest/report.js';
 import {
   renderCertificate,
   renderCurve,
@@ -41,6 +49,7 @@ import { describePeriod } from '../valuation/period.js';
 export interface CliDeps {
   readonly loadJob: (path: string) => Promise<Job>;
   readonly saveJob: (job: Job, path: string) => Promise<void>;
+  readonly readText: (path: string) => Promise<string>;
   readonly out: (text: string) => void;
   readonly err: (text: string) => void;
   readonly env: Record<string, string | undefined>;
@@ -63,6 +72,15 @@ async function serviceFor(deps: CliDeps, options: GlobalOptions) {
 
 function emit(deps: CliDeps, options: GlobalOptions, text: string, value: unknown): void {
   deps.out(options.json === true ? JSON.stringify(value, null, 2) : text);
+}
+
+function importSummary<T>(report: ImportReport<T>): Record<string, unknown> {
+  return {
+    rowsRead: report.rowsRead,
+    accepted: rowsAccepted(report),
+    rejected: rowsRejected(report),
+    issues: report.issues,
+  };
 }
 
 /**
@@ -215,6 +233,41 @@ export function buildProgram(deps: CliDeps): Command {
       const points = curveFor(service, Number(options.periods));
       emit(deps, globals(), renderCurve(points), points.length);
     });
+
+  /**
+   * Every import is the same three steps: read the file, hand it to the
+   * service, and save if the job changed and auto save is on. Writing them out
+   * one at a time invited a command that quietly forgot the save.
+   */
+  function importCommand<T>(
+    name: string,
+    description: string,
+    load: (service: Service, text: string, options: { partial: boolean }) => ImportReport<T>,
+    what: string,
+  ): void {
+    program
+      .command(`import-${name} <file>`)
+      .description(description)
+      .option('--partial', 'take the rows that parsed even when others did not')
+      .action(async (file: string, options: { partial?: boolean }) => {
+        const service = await serviceFor(deps, globals());
+        const report = load(service, await deps.readText(file), {
+          partial: options.partial === true,
+        });
+        if (!hasErrors(report) || options.partial === true) {
+          if (service.config.autoSave) {
+            await deps.saveJob(service.job, service.config.jobFile);
+          }
+        }
+        emit(deps, globals(), formatImportReport(report, what), importSummary(report));
+      });
+  }
+
+  importCommand('records', 'load a survey book export', loadRecords, 'records');
+  importCommand('sign-offs', 'load an inspection register export', loadSignOffs, 'sign offs');
+  importCommand('ncrs', 'load a non conformance register export', loadNcrs, 'reports');
+  importCommand('diary', 'load the standdowns out of a site diary', loadDiary, 'diary lines');
+  importCommand('holidays', 'load the contract holiday list', loadHolidays, 'holidays');
 
   program
     .command('reconcile')
