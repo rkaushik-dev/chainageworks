@@ -130,6 +130,7 @@ export function renderCertificate(certificate: Certificate): string {
       [
         ['measured work', formatMoney(certificate.measuredWork)],
         ['materials on site', formatMoney(certificate.materialsOnSite)],
+        ['daywork', formatMoney(certificate.daywork)],
         ['gross valuation', formatMoney(certificate.gross)],
         ['less retention', formatMoney(retention.held)],
         ['net valuation', formatMoney(certificate.netValuation)],

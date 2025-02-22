@@ -125,6 +125,7 @@ export function certificateDto(certificate: Certificate): Record<string, unknown
     billRevision: certificate.billRevision,
     measuredWork: moneyDto(certificate.measuredWork),
     materialsOnSite: moneyDto(certificate.materialsOnSite),
+    daywork: moneyDto(certificate.daywork),
     gross: moneyDto(certificate.gross),
     retention: {
       accrued: moneyDto(certificate.retention.accrued),

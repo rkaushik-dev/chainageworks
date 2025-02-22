@@ -101,6 +101,8 @@ export function certificateFor(service: Service, number: number): Certificate {
     ...(settings.materialsAllowance === null
       ? {}
       : { materialsAllowance: settings.materialsAllowance }),
+    dayworkSchedule: settings.daywork,
+    dayworkSheets: service.job.dayworkSheets.all(),
     substantialCompletionOn: settings.substantialCompletionOn,
     defectsCertificateOn: settings.defectsCertificateOn,
   });

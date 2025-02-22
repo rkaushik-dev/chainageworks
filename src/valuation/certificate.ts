@@ -1,11 +1,14 @@
 import { BadInputError } from '../errors.js';
 import { billAsAt, revisionAsAt } from '../domain/bill/revision.js';
 import type { Money } from '../domain/money/money.js';
-import { addMoney, subtractMoney, sumMoney } from '../domain/money/money.js';
+import { addMoney, subtractMoney, sumMoney, zeroMoney } from '../domain/money/money.js';
 import type { Percent } from '../domain/money/percent.js';
 import type { ProgressContext } from '../progress/context.js';
 import type { PackageEarning } from '../progress/earn.js';
 import { earnAll } from '../progress/earn.js';
+import type { DayworkSchedule } from '../domain/daywork/schedule.js';
+import type { DayworkSheet } from '../domain/daywork/sheet.js';
+import { dayworkValue } from '../domain/daywork/sheet.js';
 import type { MaterialsOnSite } from './materials.js';
 import { claimableMaterials, materialsValue } from './materials.js';
 import type { ValuationPeriod } from './period.js';
@@ -20,6 +23,8 @@ export interface CertificateInput {
   readonly retention: RetentionTerms;
   readonly materials?: readonly MaterialsOnSite[];
   readonly materialsAllowance?: Percent;
+  readonly dayworkSchedule?: DayworkSchedule | null;
+  readonly dayworkSheets?: readonly DayworkSheet[];
   /** The cumulative gross certified by the previous certificate. */
   readonly previouslyCertified: Money;
   readonly substantialCompletionOn?: SiteDate | null;
@@ -41,6 +46,8 @@ export interface Certificate {
   readonly measuredWork: Money;
   readonly materialsOnSite: Money;
   readonly materialsClaimed: readonly MaterialsOnSite[];
+  /** Signed daywork, which is measured work that could not be measured. */
+  readonly daywork: Money;
   readonly gross: Money;
   readonly retention: RetentionState;
   readonly netValuation: Money;
@@ -70,7 +77,12 @@ export function buildCertificate(input: CertificateInput): Certificate {
     bill.currency,
     input.materialsAllowance,
   );
-  const gross = addMoney(measuredWork, materialsOnSite);
+  const schedule = input.dayworkSchedule ?? null;
+  const daywork =
+    schedule === null
+      ? zeroMoney(bill.currency)
+      : dayworkValue(schedule, input.dayworkSheets ?? [], asAt);
+  const gross = addMoney(addMoney(measuredWork, materialsOnSite), daywork);
 
   const retention = computeRetention({
     grossValuation: gross,
@@ -89,6 +101,7 @@ export function buildCertificate(input: CertificateInput): Certificate {
     measuredWork,
     materialsOnSite,
     materialsClaimed: claimableMaterials(materials, asAt),
+    daywork,
     gross,
     retention,
     netValuation,

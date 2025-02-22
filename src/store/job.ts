@@ -3,6 +3,8 @@ import type { Alignment } from '../domain/chainage/alignment.js';
 import type { BillRevision } from '../domain/bill/revision.js';
 import { buildBillHistory } from '../domain/bill/revision.js';
 import type { CreditProfile } from '../domain/credit/profile.js';
+import type { DayworkSchedule } from '../domain/daywork/schedule.js';
+import type { DayworkSheet } from '../domain/daywork/sheet.js';
 import { STANDARD_PROFILES, buildProfileRegistry } from '../domain/credit/catalogue.js';
 import type { InspectionPlan } from '../domain/itp/plan.js';
 import type { Ncr } from '../domain/itp/ncr.js';
@@ -36,6 +38,8 @@ export interface JobSettings {
   readonly contractSum: Money;
   readonly retention: RetentionTerms;
   readonly materialsAllowance: Percent | null;
+  /** The daywork schedule, when the contract has one. */
+  readonly daywork: DayworkSchedule | null;
   readonly tolerances: ToleranceSet;
   readonly workingDays: readonly number[];
   readonly cutOffDay: number;
@@ -52,6 +56,7 @@ export interface JobSettingsInput {
   readonly contractSum: Money;
   readonly retention?: RetentionTerms;
   readonly materialsAllowance?: Percent | null;
+  readonly daywork?: DayworkSchedule | null;
   readonly tolerances?: ToleranceSet;
   readonly workingDays?: readonly number[];
   readonly cutOffDay?: number;
@@ -81,6 +86,7 @@ export interface Job {
   readonly records: Repository<SurveyRecord>;
   readonly materials: Repository<MaterialsOnSite>;
   readonly variations: Repository<Variation>;
+  readonly dayworkSheets: Repository<DayworkSheet>;
   holidays: readonly SiteDate[];
   standdowns: readonly Standdown[];
 }
@@ -107,6 +113,7 @@ export function jobSettings(input: JobSettingsInput): JobSettings {
     contractSum: input.contractSum,
     retention: input.retention ?? DEFAULT_RETENTION,
     materialsAllowance: input.materialsAllowance ?? null,
+    daywork: input.daywork ?? null,
     tolerances: input.tolerances ?? DEFAULT_TOLERANCES,
     workingDays: input.workingDays ?? DEFAULT_WORKING_DAYS,
     cutOffDay,
@@ -134,6 +141,7 @@ export function createJob(input: JobSettingsInput): Job {
     records: inMemoryRepository<SurveyRecord>('survey record', (r) => r.id),
     materials: inMemoryRepository<MaterialsOnSite>('materials on site', (m) => m.id),
     variations: inMemoryRepository<Variation>('variation', (v) => v.id),
+    dayworkSheets: inMemoryRepository<DayworkSheet>('daywork sheet', (s) => s.id),
     holidays: [],
     standdowns: [],
   };

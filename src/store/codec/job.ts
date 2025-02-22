@@ -26,6 +26,12 @@ import type {
 import { buildVariation } from '../../domain/variation/variation.js';
 import type { MaterialsOnSite } from '../../valuation/materials.js';
 import { buildMaterialsOnSite } from '../../valuation/materials.js';
+import {
+  dayworkScheduleFromJson,
+  dayworkScheduleToJson,
+  dayworkSheetFromJson,
+  dayworkSheetToJson,
+} from './daywork.js';
 import type { Job, JobSettings } from '../job.js';
 import { createJob } from '../job.js';
 import { putAll } from '../repository.js';
@@ -72,6 +78,7 @@ export interface JobDocument {
   readonly records: readonly Record<string, unknown>[];
   readonly materials: readonly Record<string, unknown>[];
   readonly variations: readonly Record<string, unknown>[];
+  readonly dayworkSheets: readonly Record<string, unknown>[];
   readonly holidays: readonly string[];
   readonly standdowns: readonly Record<string, unknown>[];
 }
@@ -137,6 +144,7 @@ function settingsToJson(settings: JobSettings): Record<string, unknown> {
     },
     materialsAllowance:
       settings.materialsAllowance === null ? null : percentToJson(settings.materialsAllowance),
+    daywork: settings.daywork === null ? null : dayworkScheduleToJson(settings.daywork),
     tolerances: settings.tolerances.rules.map((rule) => ({
       workClass: rule.workClass,
       allowance: percentToJson(rule.allowance),
@@ -540,6 +548,7 @@ export function jobToJson(job: Job): JobDocument {
     records: job.records.all().map(recordToJson),
     materials: job.materials.all().map(materialsToJson),
     variations: job.variations.all().map(variationToJson),
+    dayworkSheets: job.dayworkSheets.all().map(dayworkSheetToJson),
     holidays: job.holidays.map(dateToJson),
     standdowns: job.standdowns.map(standdownToJson),
   };
@@ -570,6 +579,7 @@ export function jobFromJson(value: unknown): Job {
     },
     materialsAllowance:
       allowance === null || allowance === undefined ? null : percentFromJson(allowance),
+    daywork: dayworkScheduleFromJson(settings['daywork']),
     tolerances: {
       rules: arrayFromJson(settings['tolerances'], 'tolerance rules').map((entry) => {
         const rule = objectFromJson(entry, 'tolerance rule');
@@ -616,6 +626,10 @@ export function jobFromJson(value: unknown): Job {
     arrayFromJson(doc['materials'], 'materials on site').map(materialsFromJson),
   );
   putAll(job.variations, arrayFromJson(doc['variations'], 'variations').map(variationFromJson));
+  putAll(
+    job.dayworkSheets,
+    arrayFromJson(doc['dayworkSheets'] ?? [], 'daywork sheets').map(dayworkSheetFromJson),
+  );
   job.holidays = arrayFromJson(doc['holidays'], 'holidays').map(dateFromJson);
   job.standdowns = arrayFromJson(doc['standdowns'], 'standdowns').map(standdownFromJson);
   return job;
