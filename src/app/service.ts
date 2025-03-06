@@ -16,6 +16,8 @@ import { importSurveyRecords } from '../ingest/records.js';
 import type { ImportReport } from '../ingest/report.js';
 import { hasErrors } from '../ingest/report.js';
 import type { ProgressContext } from '../progress/context.js';
+import type { DelayReport } from '../reporting/delayReport.js';
+import { buildDelayReport } from '../reporting/delayReport.js';
 import type { ProgressReport } from '../reporting/progressReport.js';
 import { buildProgressReport } from '../reporting/progressReport.js';
 import type { Baseline, CurvePoint } from '../reporting/sCurve.js';
@@ -23,7 +25,7 @@ import { buildSCurve, sCurveBaseline } from '../reporting/sCurve.js';
 import type { StripMap } from '../reporting/stripMap.js';
 import { buildStripMap } from '../reporting/stripMap.js';
 import type { Job } from '../store/job.js';
-import { jobContext, jobSchedule } from '../store/job.js';
+import { jobCalendar, jobContext, jobSchedule } from '../store/job.js';
 import { putAll } from '../store/repository.js';
 import type { Certificate } from '../valuation/certificate.js';
 import { certifySeries } from '../valuation/certificate.js';
@@ -111,6 +113,23 @@ export function certificateFor(service: Service, number: number): Certificate {
     throw new BadInputError('the schedule does not reach that valuation', { number });
   }
   return certificate;
+}
+
+/**
+ * The extension of time position at a valuation cut-off.
+ *
+ * Null when the contract fixes no completion date, which is the honest answer:
+ * a job with no completion date cannot be late.
+ */
+export function delayFor(service: Service, number: number): DelayReport | null {
+  const settings = service.job.settings;
+  return buildDelayReport(
+    settings.completion,
+    service.job.delayEvents.all(),
+    jobCalendar(service.job),
+    settings.contractSum,
+    periodOf(service, number).cutOff,
+  );
 }
 
 export function curveFor(service: Service, count: number, baseline?: Baseline): CurvePoint[] {

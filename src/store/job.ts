@@ -5,6 +5,8 @@ import { buildBillHistory } from '../domain/bill/revision.js';
 import type { CreditProfile } from '../domain/credit/profile.js';
 import type { DayworkSchedule } from '../domain/daywork/schedule.js';
 import type { DayworkSheet } from '../domain/daywork/sheet.js';
+import type { CompletionTerms } from '../domain/delay/completion.js';
+import type { DelayEvent } from '../domain/delay/event.js';
 import { STANDARD_PROFILES, buildProfileRegistry } from '../domain/credit/catalogue.js';
 import type { InspectionPlan } from '../domain/itp/plan.js';
 import type { Ncr } from '../domain/itp/ncr.js';
@@ -40,6 +42,8 @@ export interface JobSettings {
   readonly materialsAllowance: Percent | null;
   /** The daywork schedule, when the contract has one. */
   readonly daywork: DayworkSchedule | null;
+  /** Completion date and liquidated damages, when the contract fixes them. */
+  readonly completion: CompletionTerms | null;
   readonly tolerances: ToleranceSet;
   readonly workingDays: readonly number[];
   readonly cutOffDay: number;
@@ -57,6 +61,7 @@ export interface JobSettingsInput {
   readonly retention?: RetentionTerms;
   readonly materialsAllowance?: Percent | null;
   readonly daywork?: DayworkSchedule | null;
+  readonly completion?: CompletionTerms | null;
   readonly tolerances?: ToleranceSet;
   readonly workingDays?: readonly number[];
   readonly cutOffDay?: number;
@@ -87,6 +92,7 @@ export interface Job {
   readonly materials: Repository<MaterialsOnSite>;
   readonly variations: Repository<Variation>;
   readonly dayworkSheets: Repository<DayworkSheet>;
+  readonly delayEvents: Repository<DelayEvent>;
   holidays: readonly SiteDate[];
   standdowns: readonly Standdown[];
 }
@@ -114,6 +120,7 @@ export function jobSettings(input: JobSettingsInput): JobSettings {
     retention: input.retention ?? DEFAULT_RETENTION,
     materialsAllowance: input.materialsAllowance ?? null,
     daywork: input.daywork ?? null,
+    completion: input.completion ?? null,
     tolerances: input.tolerances ?? DEFAULT_TOLERANCES,
     workingDays: input.workingDays ?? DEFAULT_WORKING_DAYS,
     cutOffDay,
@@ -142,6 +149,7 @@ export function createJob(input: JobSettingsInput): Job {
     materials: inMemoryRepository<MaterialsOnSite>('materials on site', (m) => m.id),
     variations: inMemoryRepository<Variation>('variation', (v) => v.id),
     dayworkSheets: inMemoryRepository<DayworkSheet>('daywork sheet', (s) => s.id),
+    delayEvents: inMemoryRepository<DelayEvent>('delay event', (e) => e.id),
     holidays: [],
     standdowns: [],
   };
