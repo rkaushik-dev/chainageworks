@@ -16,6 +16,8 @@ import { importSurveyRecords } from '../ingest/records.js';
 import type { ImportReport } from '../ingest/report.js';
 import { hasErrors } from '../ingest/report.js';
 import type { ProgressContext } from '../progress/context.js';
+import type { DefectsReport } from '../reporting/defectsReport.js';
+import { buildDefectsReport } from '../reporting/defectsReport.js';
 import type { DelayReport } from '../reporting/delayReport.js';
 import { buildDelayReport } from '../reporting/delayReport.js';
 import type { ProgressReport } from '../reporting/progressReport.js';
@@ -130,6 +132,16 @@ export function delayFor(service: Service, number: number): DelayReport | null {
     settings.contractSum,
     periodOf(service, number).cutOff,
   );
+}
+
+/**
+ * The defects position at a valuation cut-off, and what is stopping the
+ * defects certificate. Null when the contract has not fixed a defects period.
+ */
+export function defectsFor(service: Service, number: number): DefectsReport | null {
+  const ends = service.job.settings.defectsPeriodEnds;
+  if (ends === null) return null;
+  return buildDefectsReport(service.job.defects.all(), ends, periodOf(service, number).cutOff);
 }
 
 export function curveFor(service: Service, count: number, baseline?: Baseline): CurvePoint[] {

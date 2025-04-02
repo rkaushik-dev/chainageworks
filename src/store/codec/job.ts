@@ -38,6 +38,7 @@ import {
   delayEventFromJson,
   delayEventToJson,
 } from './delay.js';
+import { defectFromJson, defectToJson } from './defects.js';
 import type { Job, JobSettings } from '../job.js';
 import { createJob } from '../job.js';
 import { putAll } from '../repository.js';
@@ -86,6 +87,7 @@ export interface JobDocument {
   readonly variations: readonly Record<string, unknown>[];
   readonly dayworkSheets: readonly Record<string, unknown>[];
   readonly delayEvents: readonly Record<string, unknown>[];
+  readonly defects: readonly Record<string, unknown>[];
   readonly holidays: readonly string[];
   readonly standdowns: readonly Record<string, unknown>[];
 }
@@ -153,6 +155,7 @@ function settingsToJson(settings: JobSettings): Record<string, unknown> {
       settings.materialsAllowance === null ? null : percentToJson(settings.materialsAllowance),
     daywork: settings.daywork === null ? null : dayworkScheduleToJson(settings.daywork),
     completion: settings.completion === null ? null : completionToJson(settings.completion),
+    defectsPeriodEnds: optionalDateToJson(settings.defectsPeriodEnds),
     tolerances: settings.tolerances.rules.map((rule) => ({
       workClass: rule.workClass,
       allowance: percentToJson(rule.allowance),
@@ -558,6 +561,7 @@ export function jobToJson(job: Job): JobDocument {
     variations: job.variations.all().map(variationToJson),
     dayworkSheets: job.dayworkSheets.all().map(dayworkSheetToJson),
     delayEvents: job.delayEvents.all().map(delayEventToJson),
+    defects: job.defects.all().map(defectToJson),
     holidays: job.holidays.map(dateToJson),
     standdowns: job.standdowns.map(standdownToJson),
   };
@@ -590,6 +594,7 @@ export function jobFromJson(value: unknown): Job {
       allowance === null || allowance === undefined ? null : percentFromJson(allowance),
     daywork: dayworkScheduleFromJson(settings['daywork']),
     completion: completionFromJson(settings['completion']),
+    defectsPeriodEnds: optionalDateFromJson(settings['defectsPeriodEnds']),
     tolerances: {
       rules: arrayFromJson(settings['tolerances'], 'tolerance rules').map((entry) => {
         const rule = objectFromJson(entry, 'tolerance rule');
@@ -644,6 +649,7 @@ export function jobFromJson(value: unknown): Job {
     job.delayEvents,
     arrayFromJson(doc['delayEvents'] ?? [], 'delay events').map(delayEventFromJson),
   );
+  putAll(job.defects, arrayFromJson(doc['defects'] ?? [], 'defects').map(defectFromJson));
   job.holidays = arrayFromJson(doc['holidays'], 'holidays').map(dateFromJson);
   job.standdowns = arrayFromJson(doc['standdowns'], 'standdowns').map(standdownFromJson);
   return job;
