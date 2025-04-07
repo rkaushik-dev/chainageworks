@@ -39,6 +39,16 @@ import {
   delayEventToJson,
 } from './delay.js';
 import { defectFromJson, defectToJson } from './defects.js';
+import {
+  applicationFromJson,
+  applicationToJson,
+  noticeFromJson,
+  noticeToJson,
+  payLessFromJson,
+  payLessToJson,
+  subcontractFromJson,
+  subcontractToJson,
+} from './subcontract.js';
 import type { Job, JobSettings } from '../job.js';
 import { createJob } from '../job.js';
 import { putAll } from '../repository.js';
@@ -88,6 +98,10 @@ export interface JobDocument {
   readonly dayworkSheets: readonly Record<string, unknown>[];
   readonly delayEvents: readonly Record<string, unknown>[];
   readonly defects: readonly Record<string, unknown>[];
+  readonly subcontracts: readonly Record<string, unknown>[];
+  readonly paymentApplications: readonly Record<string, unknown>[];
+  readonly paymentNotices: readonly Record<string, unknown>[];
+  readonly payLessNotices: readonly Record<string, unknown>[];
   readonly holidays: readonly string[];
   readonly standdowns: readonly Record<string, unknown>[];
 }
@@ -562,6 +576,10 @@ export function jobToJson(job: Job): JobDocument {
     dayworkSheets: job.dayworkSheets.all().map(dayworkSheetToJson),
     delayEvents: job.delayEvents.all().map(delayEventToJson),
     defects: job.defects.all().map(defectToJson),
+    subcontracts: job.subcontracts.all().map(subcontractToJson),
+    paymentApplications: job.paymentApplications.all().map(applicationToJson),
+    paymentNotices: job.paymentNotices.all().map(noticeToJson),
+    payLessNotices: job.payLessNotices.all().map(payLessToJson),
     holidays: job.holidays.map(dateToJson),
     standdowns: job.standdowns.map(standdownToJson),
   };
@@ -650,6 +668,24 @@ export function jobFromJson(value: unknown): Job {
     arrayFromJson(doc['delayEvents'] ?? [], 'delay events').map(delayEventFromJson),
   );
   putAll(job.defects, arrayFromJson(doc['defects'] ?? [], 'defects').map(defectFromJson));
+  putAll(
+    job.subcontracts,
+    arrayFromJson(doc['subcontracts'] ?? [], 'subcontracts').map(subcontractFromJson),
+  );
+  putAll(
+    job.paymentApplications,
+    arrayFromJson(doc['paymentApplications'] ?? [], 'payment applications').map(
+      applicationFromJson,
+    ),
+  );
+  putAll(
+    job.paymentNotices,
+    arrayFromJson(doc['paymentNotices'] ?? [], 'payment notices').map(noticeFromJson),
+  );
+  putAll(
+    job.payLessNotices,
+    arrayFromJson(doc['payLessNotices'] ?? [], 'pay less notices').map(payLessFromJson),
+  );
   job.holidays = arrayFromJson(doc['holidays'], 'holidays').map(dateFromJson);
   job.standdowns = arrayFromJson(doc['standdowns'], 'standdowns').map(standdownFromJson);
   return job;

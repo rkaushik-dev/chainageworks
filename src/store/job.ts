@@ -16,6 +16,12 @@ import type { CurrencyCode, Money } from '../domain/money/money.js';
 import type { Percent } from '../domain/money/percent.js';
 import { buildRegister } from '../domain/packages/register.js';
 import type { WorkPackage } from '../domain/packages/workPackage.js';
+import type {
+  PayLessNotice,
+  PaymentApplication,
+  PaymentNotice,
+} from '../domain/subcontract/payment.js';
+import type { Subcontract } from '../domain/subcontract/subcontract.js';
 import type { SurveyRecord } from '../domain/survey/record.js';
 import type { ToleranceSet } from '../domain/survey/tolerance.js';
 import { DEFAULT_TOLERANCES } from '../domain/survey/tolerance.js';
@@ -98,6 +104,10 @@ export interface Job {
   readonly dayworkSheets: Repository<DayworkSheet>;
   readonly delayEvents: Repository<DelayEvent>;
   readonly defects: Repository<Defect>;
+  readonly subcontracts: Repository<Subcontract>;
+  readonly paymentApplications: Repository<PaymentApplication>;
+  readonly paymentNotices: Repository<PaymentNotice>;
+  readonly payLessNotices: Repository<PayLessNotice>;
   holidays: readonly SiteDate[];
   standdowns: readonly Standdown[];
 }
@@ -157,6 +167,16 @@ export function createJob(input: JobSettingsInput): Job {
     dayworkSheets: inMemoryRepository<DayworkSheet>('daywork sheet', (s) => s.id),
     delayEvents: inMemoryRepository<DelayEvent>('delay event', (e) => e.id),
     defects: inMemoryRepository<Defect>('defect', (x) => x.id),
+    subcontracts: inMemoryRepository<Subcontract>('subcontract', (s) => s.id),
+    paymentApplications: inMemoryRepository<PaymentApplication>(
+      'payment application',
+      (a) => a.id,
+    ),
+    paymentNotices: inMemoryRepository<PaymentNotice>('payment notice', (n) => n.applicationId),
+    payLessNotices: inMemoryRepository<PayLessNotice>(
+      'pay less notice',
+      (n) => n.applicationId,
+    ),
     holidays: [],
     standdowns: [],
   };

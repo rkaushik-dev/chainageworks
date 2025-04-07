@@ -22,6 +22,8 @@ import type { DelayReport } from '../reporting/delayReport.js';
 import { buildDelayReport } from '../reporting/delayReport.js';
 import type { ProgressReport } from '../reporting/progressReport.js';
 import { buildProgressReport } from '../reporting/progressReport.js';
+import type { SubcontractReport } from '../reporting/subcontractReport.js';
+import { buildSubcontractReport } from '../reporting/subcontractReport.js';
 import type { Baseline, CurvePoint } from '../reporting/sCurve.js';
 import { buildSCurve, sCurveBaseline } from '../reporting/sCurve.js';
 import type { StripMap } from '../reporting/stripMap.js';
@@ -142,6 +144,27 @@ export function defectsFor(service: Service, number: number): DefectsReport | nu
   const ends = service.job.settings.defectsPeriodEnds;
   if (ends === null) return null;
   return buildDefectsReport(service.job.defects.all(), ends, periodOf(service, number).cutOff);
+}
+
+/**
+ * The subcontract payment position at a valuation cut-off.
+ *
+ * Run at the same cut-off as the certificate on purpose. The two sides of the
+ * job move on different clocks otherwise, and a main contract valuation that
+ * has been certified while three subcontract notice windows quietly closed is
+ * how a job ends up paying twice for the same argument.
+ */
+export function paymentsFor(service: Service, number: number): SubcontractReport {
+  const job = service.job;
+  return buildSubcontractReport(
+    {
+      subcontracts: job.subcontracts.all(),
+      applications: job.paymentApplications.all(),
+      notices: job.paymentNotices.all(),
+      payLess: job.payLessNotices.all(),
+    },
+    periodOf(service, number).cutOff,
+  );
 }
 
 export function curveFor(service: Service, count: number, baseline?: Baseline): CurvePoint[] {
