@@ -8,6 +8,10 @@ import type { Quantity } from '../domain/quantity/quantity.js';
 import { formatQuantity, quantityAmount } from '../domain/quantity/quantity.js';
 import { formatSiteDate } from '../domain/time/siteDate.js';
 import type { ImportIssue, ImportReport } from '../ingest/report.js';
+import type { DefectsReport } from '../reporting/defectsReport.js';
+import type { DelayReport } from '../reporting/delayReport.js';
+import { barredLines, claimedDays, unassessedLines } from '../reporting/delayReport.js';
+import type { SubcontractReport } from '../reporting/subcontractReport.js';
 import { rowsAccepted, rowsRejected } from '../ingest/report.js';
 import type { PackageLine, ProgressReport } from '../reporting/progressReport.js';
 import type { CurvePoint } from '../reporting/sCurve.js';
@@ -198,5 +202,94 @@ export function importReportDto<T>(report: ImportReport<T>): Record<string, unkn
     accepted: rowsAccepted(report),
     rejected: rowsRejected(report),
     issues: report.issues.map(issueDto),
+  };
+}
+
+/**
+ * The delay position over the wire.
+ *
+ * The barred days ride alongside the awarded days rather than being folded
+ * into one figure. A client that only sees the award cannot tell a job that
+ * was never delayed from one that was delayed and served its notices late,
+ * and those two need completely different conversations.
+ */
+export function delayReportDto(report: DelayReport): Record<string, unknown> {
+  return {
+    asAt: formatSiteDate(report.asAt),
+    baseCompletion: formatSiteDate(report.position.baseCompletion),
+    extendedCompletion: formatSiteDate(report.position.extendedCompletion),
+    awardedDays: report.position.awardedDays,
+    barredDays: report.position.barredDays,
+    claimedDays: claimedDays(report),
+    daysLate: report.daysLate,
+    damages: moneyDto(report.damages),
+    damagesCapped: report.damagesCapped,
+    barred: barredLines(report).map((line) => line.id),
+    unassessed: unassessedLines(report).map((line) => line.id),
+    events: report.lines.map((line) => ({
+      id: line.id,
+      reference: line.reference,
+      cause: line.cause,
+      entitlement: line.entitlement,
+      from: formatSiteDate(line.from),
+      to: formatSiteDate(line.to),
+      workingDays: line.workingDays,
+      awardedDays: line.awardedDays,
+      bar: line.bar,
+      carriesMoney: line.carriesMoney,
+    })),
+  };
+}
+
+export function defectsReportDto(report: DefectsReport): Record<string, unknown> {
+  return {
+    asAt: formatSiteDate(report.asAt),
+    periodEnds: formatSiteDate(report.periodEnds),
+    block: report.block,
+    summary: {
+      outstanding: report.summary.outstanding,
+      overdue: report.summary.overdue,
+      disputed: report.summary.disputed,
+      bySeverity: report.summary.bySeverity,
+    },
+    outstanding: report.outstanding.map((defect) => ({
+      id: defect.id,
+      reference: defect.reference,
+      packageId: defect.packageId,
+      extent: defect.extent === null ? null : formatChainageRange(defect.extent),
+      description: defect.description,
+      severity: defect.severity,
+      attribution: defect.attribution,
+      raisedOn: formatSiteDate(defect.raisedOn),
+      dueBy: formatSiteDate(defect.dueBy),
+    })),
+    overdue: report.overdue.map((defect) => defect.id),
+  };
+}
+
+export function subcontractReportDto(report: SubcontractReport): Record<string, unknown> {
+  return {
+    asAt: formatSiteDate(report.asAt),
+    exposure: report.exposure,
+    overOrder: report.overOrder.map((position) => position.subcontract.id),
+    orders: report.positions.map((position) => ({
+      id: position.subcontract.id,
+      contractor: position.subcontract.contractor,
+      orderValue: moneyDto(position.subcontract.orderValue),
+      applications: position.applications,
+      certified: moneyDto(position.certifiedToDate),
+      paid: moneyDto(position.paidToDate),
+      remaining: moneyDto(position.remaining),
+      defaulted: [...position.defaulted],
+    })),
+    diary: report.diary.map((entry) => ({
+      applicationId: entry.applicationId,
+      subcontractId: entry.subcontractId,
+      contractor: entry.contractor,
+      appliedOn: formatSiteDate(entry.appliedOn),
+      noticeBy: formatSiteDate(entry.noticeBy),
+      amount: entry.amount,
+      missed: entry.missed,
+    })),
   };
 }

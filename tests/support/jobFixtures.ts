@@ -1,5 +1,12 @@
 import { buildAlignment } from '../../src/domain/chainage/alignment.js';
+import { parseItemCode } from '../../src/domain/bill/itemCode.js';
+import { buildDefect } from '../../src/domain/defects/defect.js';
+import { buildCompletionTerms } from '../../src/domain/delay/completion.js';
+import { buildDelayEvent } from '../../src/domain/delay/event.js';
 import { moneyFromMajor } from '../../src/domain/money/money.js';
+import { percent } from '../../src/domain/money/percent.js';
+import { buildPaymentTerms } from '../../src/domain/subcontract/payment.js';
+import { buildSubcontract } from '../../src/domain/subcontract/subcontract.js';
 import { parseStation } from '../../src/domain/chainage/station.js';
 import { putAll } from '../../src/store/repository.js';
 import type { Job } from '../../src/store/job.js';
@@ -7,6 +14,7 @@ import { createJob } from '../../src/store/job.js';
 import { sampleBill } from './billFixtures.js';
 import {
   d,
+  range,
   earthworksPlan,
   pavementPlan,
   sampleNcrs,
@@ -52,4 +60,121 @@ export function emptyJob(): Job {
     name: 'A1 improvement, section 2',
     contractSum: moneyFromMajor(312_190, 'GBP'),
   });
+}
+
+const gbp = (major: number) => moneyFromMajor(major, 'GBP');
+
+/**
+ * The sample job with the commercial side loaded as well.
+ *
+ * Kept apart from `sampleJob` on purpose. Most of the engine tests want a job
+ * with no completion date and no defects period, because that is what a job
+ * looks like before anybody argues about anything, and loading those terms
+ * into every fixture would hide the null paths the reports have to handle.
+ */
+export function commercialJob(): Job {
+  const job = sampleJob();
+
+  job.settings = {
+    ...job.settings,
+    completion: buildCompletionTerms({
+      baseCompletion: d('2025-09-26'),
+      damagesPerDay: gbp(2500),
+      damagesCap: percent(10),
+    }),
+    defectsPeriodEnds: d('2025-06-30'),
+  };
+
+  job.delayEvents.add(
+    buildDelayEvent({
+      id: 'DE-01',
+      reference: 'EW/2025/003',
+      cause: 'utilities',
+      description: 'live water main outside its recorded position',
+      from: d('2025-03-03'),
+      to: d('2025-03-14'),
+      notifiedOn: d('2025-03-05'),
+      awardedDays: 8,
+    }),
+  );
+  job.delayEvents.add(
+    buildDelayEvent({
+      id: 'DE-02',
+      reference: 'EW/2025/004',
+      cause: 'design',
+      description: 'revised drainage layout issued late',
+      from: d('2025-03-10'),
+      to: d('2025-03-21'),
+      notifiedOn: null,
+    }),
+  );
+
+  job.defects.add(
+    buildDefect({
+      id: 'DF-01',
+      reference: 'DEF/2025/001',
+      packageId: 'WP-03',
+      extent: range('12+400', '12+600'),
+      description: 'surface course ravelling at the joint',
+      raisedOn: d('2025-03-03'),
+      dueBy: d('2025-03-17'),
+    }),
+  );
+  job.defects.add(
+    buildDefect({
+      id: 'DF-02',
+      reference: 'DEF/2025/002',
+      packageId: 'WP-01',
+      description: 'missing barrier at the retaining wall',
+      severity: 'safety',
+      raisedOn: d('2025-03-20'),
+      dueBy: d('2025-03-21'),
+    }),
+  );
+
+  job.subcontracts.add(
+    buildSubcontract({
+      id: 'SC-EARTH',
+      name: 'bulk earthworks and capping',
+      contractor: 'Dowsett Plant Hire',
+      orderValue: gbp(250_000),
+      packageIds: ['WP-01', 'WP-02'],
+      codes: [parseItemCode('E423.1')],
+      placedOn: d('2024-11-04'),
+    }),
+  );
+  job.subcontracts.add(
+    buildSubcontract({
+      id: 'SC-FENCE',
+      name: 'permanent fencing',
+      contractor: 'Marchmont Fencing',
+      orderValue: gbp(31_000),
+      packageIds: ['WP-03'],
+      terms: buildPaymentTerms({ dueDays: 21, retention: percent(3) }),
+      placedOn: d('2025-01-13'),
+    }),
+  );
+
+  job.paymentApplications.add({
+    id: 'SA-01',
+    subcontractId: 'SC-EARTH',
+    periodNumber: 1,
+    appliedOn: d('2025-01-25'),
+    gross: gbp(40_000),
+    previouslyPaid: gbp(0),
+  });
+  job.paymentApplications.add({
+    id: 'SA-02',
+    subcontractId: 'SC-EARTH',
+    periodNumber: 2,
+    appliedOn: d('2025-02-25'),
+    gross: gbp(90_000),
+    previouslyPaid: gbp(38_000),
+  });
+  job.paymentNotices.add({
+    applicationId: 'SA-02',
+    servedOn: d('2025-03-28'),
+    valued: gbp(85_000),
+  });
+  return job;
 }

@@ -13,10 +13,13 @@ import {
   certificateFor,
   contextOf,
   curveFor,
+  defectsFor,
+  delayFor,
   loadDiary,
   loadNcrs,
   loadRecords,
   loadSignOffs,
+  paymentsFor,
   progressFor,
   scheduleOf,
   stripFor,
@@ -26,11 +29,14 @@ import { jobBlockers } from '../store/job.js';
 import {
   certificateDto,
   curveDto,
+  defectsReportDto,
+  delayReportDto,
   importReportDto,
   moneyDto,
   periodDto,
   progressReportDto,
   stripDto,
+  subcontractReportDto,
 } from './dto.js';
 import type { ImportReport } from '../ingest/report.js';
 import { toFailure } from './problem.js';
@@ -109,6 +115,11 @@ export function buildServer(service: Service): FastifyInstance {
         records: job.records.count(),
         materials: job.materials.count(),
         variations: job.variations.count(),
+        dayworkSheets: job.dayworkSheets.count(),
+        delayEvents: job.delayEvents.count(),
+        defects: job.defects.count(),
+        subcontracts: job.subcontracts.count(),
+        paymentApplications: job.paymentApplications.count(),
       },
       blockers: jobBlockers(job),
     };
@@ -206,6 +217,37 @@ export function buildServer(service: Service): FastifyInstance {
     return stripDto(
       stripFor(service, params.packageId, numberParam(params.number, 'valuation')),
     );
+  });
+
+  /**
+   * Delay and defects both answer 204 rather than 404 when the contract has
+   * not fixed the term they report on. There is nothing wrong with the request
+   * and nothing wrong with the job, so a 404 would send a client looking for a
+   * routing mistake that is not there.
+   */
+  app.get('/valuations/:number/delay', (request, reply) => {
+    const params = request.params as { number: string };
+    const report = delayFor(service, numberParam(params.number, 'valuation'));
+    if (report === null) {
+      void reply.status(204).send();
+      return reply;
+    }
+    return delayReportDto(report);
+  });
+
+  app.get('/valuations/:number/defects', (request, reply) => {
+    const params = request.params as { number: string };
+    const report = defectsFor(service, numberParam(params.number, 'valuation'));
+    if (report === null) {
+      void reply.status(204).send();
+      return reply;
+    }
+    return defectsReportDto(report);
+  });
+
+  app.get('/valuations/:number/payments', (request) => {
+    const params = request.params as { number: string };
+    return subcontractReportDto(paymentsFor(service, numberParam(params.number, 'valuation')));
   });
 
   app.get('/curve', (request) => {
