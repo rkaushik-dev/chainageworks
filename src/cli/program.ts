@@ -202,23 +202,51 @@ export function buildProgram(deps: CliDeps): Command {
       emit(deps, globals(), text, service.job.packages.count());
     });
 
-  program
-    .command('progress <valuation>')
-    .description('the progress report for a valuation')
-    .action(async (valuation: string) => {
-      const service = await serviceFor(deps, globals());
-      const report = progressFor(service, Number(valuation));
-      emit(deps, globals(), renderProgressReport(report), report.period.number);
-    });
+  /**
+   * Every report on a valuation is the same four steps: load the job, build the
+   * report at that number, say so when the contract fixes no such term, and
+   * print either the text or the summary. Written out one command at a time
+   * they drifted, and the two that could answer null did it differently.
+   */
+  function valuationCommand<T>(
+    name: string,
+    description: string,
+    build: (service: Service, valuation: number) => T | null,
+    render: (report: T) => string,
+    summarise: (report: T) => unknown,
+    absent: string,
+  ): void {
+    program
+      .command(`${name} <valuation>`)
+      .description(description)
+      .action(async (valuation: string) => {
+        const service = await serviceFor(deps, globals());
+        const report = build(service, Number(valuation));
+        if (report === null) {
+          emit(deps, globals(), absent, null);
+          return;
+        }
+        emit(deps, globals(), render(report), summarise(report));
+      });
+  }
 
-  program
-    .command('certificate <valuation>')
-    .description('the payment certificate for a valuation')
-    .action(async (valuation: string) => {
-      const service = await serviceFor(deps, globals());
-      const certificate = certificateFor(service, Number(valuation));
-      emit(deps, globals(), renderCertificate(certificate), certificate.period.number);
-    });
+  valuationCommand(
+    'progress',
+    'the progress report for a valuation',
+    progressFor,
+    renderProgressReport,
+    (report) => report.period.number,
+    'no such valuation',
+  );
+
+  valuationCommand(
+    'certificate',
+    'the payment certificate for a valuation',
+    certificateFor,
+    renderCertificate,
+    (certificate) => certificate.period.number,
+    'no such valuation',
+  );
 
   program
     .command('strip <package> <valuation>')
@@ -230,46 +258,32 @@ export function buildProgram(deps: CliDeps): Command {
       emit(deps, globals(), `${heading}\n${renderStrip(map)}`, map.packageId);
     });
 
-  /**
-   * Delay and defects are reported by the same command shape, and both say so
-   * plainly when the contract fixes no such term. Printing an empty report
-   * would read as a job with nothing outstanding, which is a different and
-   * much more comfortable answer than the true one.
-   */
-  program
-    .command('delay <valuation>')
-    .description('the extension of time position at a valuation')
-    .action(async (valuation: string) => {
-      const service = await serviceFor(deps, globals());
-      const report = delayFor(service, Number(valuation));
-      if (report === null) {
-        emit(deps, globals(), 'the contract fixes no completion date', null);
-        return;
-      }
-      emit(deps, globals(), renderDelayReport(report), report.daysLate);
-    });
+  valuationCommand(
+    'delay',
+    'the extension of time position at a valuation',
+    delayFor,
+    renderDelayReport,
+    (report) => report.daysLate,
+    'the contract fixes no completion date',
+  );
 
-  program
-    .command('defects <valuation>')
-    .description('the defects position and what it blocks')
-    .action(async (valuation: string) => {
-      const service = await serviceFor(deps, globals());
-      const report = defectsFor(service, Number(valuation));
-      if (report === null) {
-        emit(deps, globals(), 'the contract fixes no defects period', null);
-        return;
-      }
-      emit(deps, globals(), renderDefectsReport(report), report.summary.outstanding);
-    });
+  valuationCommand(
+    'defects',
+    'the defects position and what it blocks',
+    defectsFor,
+    renderDefectsReport,
+    (report) => report.summary.outstanding,
+    'the contract fixes no defects period',
+  );
 
-  program
-    .command('payments <valuation>')
-    .description('the subcontract payment position and the notice diary')
-    .action(async (valuation: string) => {
-      const service = await serviceFor(deps, globals());
-      const report = paymentsFor(service, Number(valuation));
-      emit(deps, globals(), renderSubcontractReport(report), report.positions.length);
-    });
+  valuationCommand(
+    'payments',
+    'the subcontract payment position and the notice diary',
+    paymentsFor,
+    renderSubcontractReport,
+    (report) => report.positions.length,
+    'no orders have been placed',
+  );
 
   program
     .command('curve')

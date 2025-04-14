@@ -202,52 +202,40 @@ export function buildServer(service: Service): FastifyInstance {
       }));
   });
 
-  app.get('/valuations/:number/progress', (request) => {
-    const params = request.params as { number: string };
-    return progressReportDto(progressFor(service, numberParam(params.number, 'valuation')));
-  });
+  /**
+   * Every report on a valuation hangs off the same path and answers the same
+   * two ways. A report the contract has no term for comes back 204 rather than
+   * 404: there is nothing wrong with the request and nothing wrong with the
+   * job, so a 404 would send a client looking for a routing mistake that is
+   * not there.
+   */
+  function valuationRoute<T>(
+    suffix: string,
+    build: (service: Service, valuation: number) => T | null,
+    dto: (report: T) => Record<string, unknown>,
+  ): void {
+    app.get(`/valuations/:number/${suffix}`, (request, reply) => {
+      const params = request.params as { number: string };
+      const report = build(service, numberParam(params.number, 'valuation'));
+      if (report === null) {
+        void reply.status(204).send();
+        return reply;
+      }
+      return dto(report);
+    });
+  }
 
-  app.get('/valuations/:number/certificate', (request) => {
-    const params = request.params as { number: string };
-    return certificateDto(certificateFor(service, numberParam(params.number, 'valuation')));
-  });
+  valuationRoute('progress', progressFor, progressReportDto);
+  valuationRoute('certificate', certificateFor, certificateDto);
+  valuationRoute('delay', delayFor, delayReportDto);
+  valuationRoute('defects', defectsFor, defectsReportDto);
+  valuationRoute('payments', paymentsFor, subcontractReportDto);
 
   app.get('/valuations/:number/strip/:packageId', (request) => {
     const params = request.params as { number: string; packageId: string };
     return stripDto(
       stripFor(service, params.packageId, numberParam(params.number, 'valuation')),
     );
-  });
-
-  /**
-   * Delay and defects both answer 204 rather than 404 when the contract has
-   * not fixed the term they report on. There is nothing wrong with the request
-   * and nothing wrong with the job, so a 404 would send a client looking for a
-   * routing mistake that is not there.
-   */
-  app.get('/valuations/:number/delay', (request, reply) => {
-    const params = request.params as { number: string };
-    const report = delayFor(service, numberParam(params.number, 'valuation'));
-    if (report === null) {
-      void reply.status(204).send();
-      return reply;
-    }
-    return delayReportDto(report);
-  });
-
-  app.get('/valuations/:number/defects', (request, reply) => {
-    const params = request.params as { number: string };
-    const report = defectsFor(service, numberParam(params.number, 'valuation'));
-    if (report === null) {
-      void reply.status(204).send();
-      return reply;
-    }
-    return defectsReportDto(report);
-  });
-
-  app.get('/valuations/:number/payments', (request) => {
-    const params = request.params as { number: string };
-    return subcontractReportDto(paymentsFor(service, numberParam(params.number, 'valuation')));
   });
 
   app.get('/curve', (request) => {

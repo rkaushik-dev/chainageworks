@@ -166,3 +166,42 @@ describe('cw payments', () => {
     expect(run.out).toMatch(/orders +0/);
   });
 });
+
+describe('every valuation report answers the same way', () => {
+  const suffixes = ['progress', 'certificate', 'delay', 'defects', 'payments'];
+
+  it('answers 200 on the loaded job', async () => {
+    for (const suffix of suffixes) {
+      const response = await get(`/valuations/3/${suffix}`);
+      expect([suffix, response.statusCode]).toEqual([suffix, 200]);
+    }
+  });
+
+  it('complains about a valuation number that is not one', async () => {
+    for (const suffix of suffixes) {
+      const response = await get(`/valuations/nought/${suffix}`);
+      expect([suffix, response.statusCode]).toEqual([suffix, 400]);
+      expect(response.json<{ code: string }>().code).toBe('bad_input');
+    }
+  });
+
+  it('has no route under a name nobody reports on', async () => {
+    const response = await get('/valuations/3/insurance');
+    expect(response.statusCode).toBe(404);
+  });
+});
+
+describe('every valuation command answers the same way', () => {
+  it('takes the valuation number as its only argument', async () => {
+    for (const name of ['progress', 'certificate', 'delay', 'defects', 'payments']) {
+      const run = await runCommand([name, '3'], { job: commercialJob() });
+      expect([name, run.code]).toEqual([name, 0]);
+      expect(run.out).not.toBe('');
+    }
+  });
+
+  it('refuses a command with no valuation number', async () => {
+    const run = await runCommand(['payments']);
+    expect(run.code).toBe(1);
+  });
+});
