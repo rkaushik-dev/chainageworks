@@ -17,9 +17,12 @@ import {
   curveFor,
   defectsFor,
   delayFor,
+  loadApplications,
   loadDiary,
   loadHolidays,
   loadNcrs,
+  loadNotices,
+  loadPayLessNotices,
   loadRecords,
   loadSignOffs,
   paymentsFor,
@@ -329,6 +332,19 @@ export function buildProgram(deps: CliDeps): Command {
   importCommand('ncrs', 'load a non conformance register export', loadNcrs, 'reports');
   importCommand('diary', 'load the standdowns out of a site diary', loadDiary, 'diary lines');
   importCommand('holidays', 'load the contract holiday list', loadHolidays, 'holidays');
+  importCommand(
+    'applications',
+    'load a subcontract payment application schedule',
+    loadApplications,
+    'applications',
+  );
+  importCommand('notices', 'load the payment notices served', loadNotices, 'notices');
+  importCommand(
+    'pay-less',
+    'load the pay less notices served',
+    loadPayLessNotices,
+    'pay less notices',
+  );
 
   program
     .command('reconcile')

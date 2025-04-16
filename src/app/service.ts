@@ -5,6 +5,11 @@ import { firstRevision } from '../domain/bill/revision.js';
 import type { Ncr } from '../domain/itp/ncr.js';
 import type { Standdown } from '../domain/time/calendar.js';
 import type { SignOff } from '../domain/itp/signOff.js';
+import type {
+  PayLessNotice,
+  PaymentApplication,
+  PaymentNotice,
+} from '../domain/subcontract/payment.js';
 import type { SurveyRecord } from '../domain/survey/record.js';
 import type { SiteDate } from '../domain/time/siteDate.js';
 import { siteDateParts } from '../domain/time/siteDate.js';
@@ -12,6 +17,7 @@ import type { Config } from '../config/config.js';
 import { importBillItems } from '../ingest/bill.js';
 import { importHolidays, importStanddowns } from '../ingest/diary.js';
 import { importNcrs, importSignOffs } from '../ingest/inspections.js';
+import { importApplications, importNotices, importPayLessNotices } from '../ingest/payments.js';
 import { importSurveyRecords } from '../ingest/records.js';
 import type { ImportReport } from '../ingest/report.js';
 import { hasErrors } from '../ingest/report.js';
@@ -243,6 +249,45 @@ export function loadHolidays(
 ): ImportReport<SiteDate> {
   return applyIfClean(importHolidays(text), options, (items) => {
     service.job.holidays = [...new Set([...service.job.holidays, ...items])];
+  });
+}
+
+/**
+ * The three payment registers load against the job currency rather than
+ * carrying one of their own. A subcontract priced in a different currency from
+ * the main contract is a real thing, but it is not a thing a csv column can
+ * settle, and reading one here would let a typo change what is owed.
+ */
+export function loadApplications(
+  service: Service,
+  text: string,
+  options: LoadOptions = {},
+): ImportReport<PaymentApplication> {
+  const currency = service.job.settings.currency;
+  return applyIfClean(importApplications(text, { currency }), options, (items) => {
+    putAll(service.job.paymentApplications, items);
+  });
+}
+
+export function loadNotices(
+  service: Service,
+  text: string,
+  options: LoadOptions = {},
+): ImportReport<PaymentNotice> {
+  const currency = service.job.settings.currency;
+  return applyIfClean(importNotices(text, { currency }), options, (items) => {
+    putAll(service.job.paymentNotices, items);
+  });
+}
+
+export function loadPayLessNotices(
+  service: Service,
+  text: string,
+  options: LoadOptions = {},
+): ImportReport<PayLessNotice> {
+  const currency = service.job.settings.currency;
+  return applyIfClean(importPayLessNotices(text, { currency }), options, (items) => {
+    putAll(service.job.payLessNotices, items);
   });
 }
 

@@ -15,8 +15,11 @@ import {
   curveFor,
   defectsFor,
   delayFor,
+  loadApplications,
   loadDiary,
   loadNcrs,
+  loadNotices,
+  loadPayLessNotices,
   loadRecords,
   loadSignOffs,
   paymentsFor,
@@ -265,6 +268,9 @@ export function buildServer(service: Service): FastifyInstance {
   importRoute('/import/sign-offs', loadSignOffs);
   importRoute('/import/ncrs', loadNcrs);
   importRoute('/import/diary', loadDiary);
+  importRoute('/import/applications', loadApplications);
+  importRoute('/import/notices', loadNotices);
+  importRoute('/import/pay-less', loadPayLessNotices);
 
   return app;
 }
