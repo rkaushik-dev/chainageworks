@@ -1,10 +1,10 @@
 import type { MeasurementMethod, SurveyRecord } from '../domain/survey/record.js';
 import { buildSurveyRecord } from '../domain/survey/record.js';
 import type { RowReader } from '../io/csv.js';
-import { parseCsv, readerFor } from '../io/csv.js';
 import { need, needCode, needDate, needExtent, needQuantity, optional } from './fields.js';
 import type { ImportIssue, ImportReport } from './report.js';
-import { checkColumns, issue, issueFrom } from './report.js';
+import { issue } from './report.js';
+import { readTable } from './rows.js';
 
 export const RECORD_COLUMNS = [
   'record',
@@ -37,31 +37,13 @@ const METHODS: readonly MeasurementMethod[] = [
  * ninety eight wait a day.
  */
 export function importSurveyRecords(text: string): ImportReport<SurveyRecord> {
-  const table = parseCsv(text);
-  const columnProblem = checkColumns<SurveyRecord>(table, RECORD_COLUMNS);
-  if (columnProblem !== null) return columnProblem;
-
-  const imported: SurveyRecord[] = [];
-  const issues: ImportIssue[] = [];
-  const seen = new Set<string>();
-
-  for (const row of table.rows) {
-    const reader = readerFor(table, row);
-    let record: SurveyRecord;
-    try {
-      record = readRow(reader, issues);
-    } catch (error) {
-      issues.push(issueFrom(error, reader.line));
-      continue;
-    }
-    if (seen.has(record.id)) {
-      issues.push(issue(`record ${record.id} appears twice`, row.line, 'record'));
-      continue;
-    }
-    seen.add(record.id);
-    imported.push(record);
-  }
-  return { imported, issues, rowsRead: table.rows.length };
+  return readTable(text, {
+    columns: RECORD_COLUMNS,
+    read: readRow,
+    keyOf: (record) => record.id,
+    duplicate: (id) => `record ${id} appears twice`,
+    keyColumn: 'record',
+  });
 }
 
 function readRow(reader: RowReader, issues: ImportIssue[]): SurveyRecord {
