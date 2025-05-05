@@ -22,6 +22,7 @@ import type {
   PaymentNotice,
 } from '../domain/subcontract/payment.js';
 import type { Subcontract } from '../domain/subcontract/subcontract.js';
+import type { ResourceReturn } from '../domain/resource/return.js';
 import type { SurveyRecord } from '../domain/survey/record.js';
 import type { ToleranceSet } from '../domain/survey/tolerance.js';
 import { DEFAULT_TOLERANCES } from '../domain/survey/tolerance.js';
@@ -29,6 +30,8 @@ import type { SiteCalendar, Standdown } from '../domain/time/calendar.js';
 import { buildCalendar, DEFAULT_WORKING_DAYS } from '../domain/time/calendar.js';
 import type { SiteDate } from '../domain/time/siteDate.js';
 import type { Variation } from '../domain/variation/variation.js';
+import type { OutputAllowance } from '../progress/productivity.js';
+import { buildAllowances } from '../progress/productivity.js';
 import type { ProgressContext } from '../progress/context.js';
 import { buildProgressContext } from '../progress/context.js';
 import type { MaterialsOnSite } from '../valuation/materials.js';
@@ -53,6 +56,8 @@ export interface JobSettings {
   readonly completion: CompletionTerms | null;
   /** When the defects liability period ends, if it has been fixed. */
   readonly defectsPeriodEnds: SiteDate | null;
+  /** What each step of a rule of credit was expected to produce in an hour. */
+  readonly outputAllowances: readonly OutputAllowance[];
   readonly tolerances: ToleranceSet;
   readonly workingDays: readonly number[];
   readonly cutOffDay: number;
@@ -72,6 +77,7 @@ export interface JobSettingsInput {
   readonly daywork?: DayworkSchedule | null;
   readonly completion?: CompletionTerms | null;
   readonly defectsPeriodEnds?: SiteDate | null;
+  readonly outputAllowances?: readonly OutputAllowance[];
   readonly tolerances?: ToleranceSet;
   readonly workingDays?: readonly number[];
   readonly cutOffDay?: number;
@@ -108,6 +114,7 @@ export interface Job {
   readonly paymentApplications: Repository<PaymentApplication>;
   readonly paymentNotices: Repository<PaymentNotice>;
   readonly payLessNotices: Repository<PayLessNotice>;
+  readonly resourceReturns: Repository<ResourceReturn>;
   holidays: readonly SiteDate[];
   standdowns: readonly Standdown[];
 }
@@ -137,6 +144,7 @@ export function jobSettings(input: JobSettingsInput): JobSettings {
     daywork: input.daywork ?? null,
     completion: input.completion ?? null,
     defectsPeriodEnds: input.defectsPeriodEnds ?? null,
+    outputAllowances: buildAllowances(input.outputAllowances ?? []),
     tolerances: input.tolerances ?? DEFAULT_TOLERANCES,
     workingDays: input.workingDays ?? DEFAULT_WORKING_DAYS,
     cutOffDay,
@@ -177,6 +185,7 @@ export function createJob(input: JobSettingsInput): Job {
       'pay less notice',
       (n) => n.applicationId,
     ),
+    resourceReturns: inMemoryRepository<ResourceReturn>('resource return', (r) => r.id),
     holidays: [],
     standdowns: [],
   };

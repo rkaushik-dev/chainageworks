@@ -24,6 +24,7 @@ import {
   loadNotices,
   loadPayLessNotices,
   loadRecords,
+  loadResourceReturns,
   loadSignOffs,
   paymentsFor,
   periodOf,
@@ -339,6 +340,12 @@ export function buildProgram(deps: CliDeps): Command {
     'applications',
   );
   importCommand('notices', 'load the payment notices served', loadNotices, 'notices');
+  importCommand(
+    'returns',
+    'load a labour and plant resource return export',
+    loadResourceReturns,
+    'resource lines',
+  );
   importCommand(
     'pay-less',
     'load the pay less notices served',

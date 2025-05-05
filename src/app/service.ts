@@ -4,6 +4,7 @@ import type { BillItem } from '../domain/bill/billItem.js';
 import { firstRevision } from '../domain/bill/revision.js';
 import type { Ncr } from '../domain/itp/ncr.js';
 import type { Standdown } from '../domain/time/calendar.js';
+import type { ResourceReturn } from '../domain/resource/return.js';
 import type { SignOff } from '../domain/itp/signOff.js';
 import type {
   PayLessNotice,
@@ -19,6 +20,7 @@ import { importHolidays, importStanddowns } from '../ingest/diary.js';
 import { importNcrs, importSignOffs } from '../ingest/inspections.js';
 import { importApplications, importNotices, importPayLessNotices } from '../ingest/payments.js';
 import { importSurveyRecords } from '../ingest/records.js';
+import { importResourceReturns } from '../ingest/resources.js';
 import type { ImportReport } from '../ingest/report.js';
 import { hasErrors } from '../ingest/report.js';
 import type { ProgressContext } from '../progress/context.js';
@@ -288,6 +290,16 @@ export function loadPayLessNotices(
   const currency = service.job.settings.currency;
   return applyIfClean(importPayLessNotices(text, { currency }), options, (items) => {
     putAll(service.job.payLessNotices, items);
+  });
+}
+
+export function loadResourceReturns(
+  service: Service,
+  text: string,
+  options: LoadOptions = {},
+): ImportReport<ResourceReturn> {
+  return applyIfClean(importResourceReturns(text), options, (items) => {
+    putAll(service.job.resourceReturns, items);
   });
 }
 

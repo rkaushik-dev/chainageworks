@@ -40,6 +40,12 @@ import {
 } from './delay.js';
 import { defectFromJson, defectToJson } from './defects.js';
 import {
+  allowanceFromJson,
+  allowanceToJson,
+  resourceReturnFromJson,
+  resourceReturnToJson,
+} from './resource.js';
+import {
   applicationFromJson,
   applicationToJson,
   noticeFromJson,
@@ -102,6 +108,7 @@ export interface JobDocument {
   readonly paymentApplications: readonly Record<string, unknown>[];
   readonly paymentNotices: readonly Record<string, unknown>[];
   readonly payLessNotices: readonly Record<string, unknown>[];
+  readonly resourceReturns: readonly Record<string, unknown>[];
   readonly holidays: readonly string[];
   readonly standdowns: readonly Record<string, unknown>[];
 }
@@ -170,6 +177,7 @@ function settingsToJson(settings: JobSettings): Record<string, unknown> {
     daywork: settings.daywork === null ? null : dayworkScheduleToJson(settings.daywork),
     completion: settings.completion === null ? null : completionToJson(settings.completion),
     defectsPeriodEnds: optionalDateToJson(settings.defectsPeriodEnds),
+    outputAllowances: settings.outputAllowances.map(allowanceToJson),
     tolerances: settings.tolerances.rules.map((rule) => ({
       workClass: rule.workClass,
       allowance: percentToJson(rule.allowance),
@@ -580,6 +588,7 @@ export function jobToJson(job: Job): JobDocument {
     paymentApplications: job.paymentApplications.all().map(applicationToJson),
     paymentNotices: job.paymentNotices.all().map(noticeToJson),
     payLessNotices: job.payLessNotices.all().map(payLessToJson),
+    resourceReturns: job.resourceReturns.all().map(resourceReturnToJson),
     holidays: job.holidays.map(dateToJson),
     standdowns: job.standdowns.map(standdownToJson),
   };
@@ -613,6 +622,10 @@ export function jobFromJson(value: unknown): Job {
     daywork: dayworkScheduleFromJson(settings['daywork']),
     completion: completionFromJson(settings['completion']),
     defectsPeriodEnds: optionalDateFromJson(settings['defectsPeriodEnds']),
+    outputAllowances: arrayFromJson(
+      settings['outputAllowances'] ?? [],
+      'output allowances',
+    ).map(allowanceFromJson),
     tolerances: {
       rules: arrayFromJson(settings['tolerances'], 'tolerance rules').map((entry) => {
         const rule = objectFromJson(entry, 'tolerance rule');
@@ -685,6 +698,10 @@ export function jobFromJson(value: unknown): Job {
   putAll(
     job.payLessNotices,
     arrayFromJson(doc['payLessNotices'] ?? [], 'pay less notices').map(payLessFromJson),
+  );
+  putAll(
+    job.resourceReturns,
+    arrayFromJson(doc['resourceReturns'] ?? [], 'resource returns').map(resourceReturnFromJson),
   );
   job.holidays = arrayFromJson(doc['holidays'], 'holidays').map(dateFromJson);
   job.standdowns = arrayFromJson(doc['standdowns'], 'standdowns').map(standdownFromJson);

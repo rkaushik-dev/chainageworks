@@ -21,6 +21,7 @@ import {
   loadNotices,
   loadPayLessNotices,
   loadRecords,
+  loadResourceReturns,
   loadSignOffs,
   paymentsFor,
   progressFor,
@@ -270,6 +271,7 @@ export function buildServer(service: Service): FastifyInstance {
   importRoute('/import/diary', loadDiary);
   importRoute('/import/applications', loadApplications);
   importRoute('/import/notices', loadNotices);
+  importRoute('/import/returns', loadResourceReturns);
   importRoute('/import/pay-less', loadPayLessNotices);
 
   return app;
