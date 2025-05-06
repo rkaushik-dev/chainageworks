@@ -79,6 +79,11 @@ function readHourKind(reader: Parameters<typeof need>[0]): HourKind {
  * A row whose grouping fields disagree with the first row of the same return
  * is rejected on its own rather than poisoning the return, because the usual
  * cause is one line pasted under the wrong heading.
+ *
+ * The report counts returns rather than rows, because a return is what the
+ * caller gets back and a count of rows would say four when two returns were
+ * loaded. Row level problems are still reported as issues against their own
+ * line, so nothing is lost by counting the larger thing.
  */
 export function importResourceReturns(text: string): ImportReport<ResourceReturn> {
   const rows = readTable<ResourceRow>(text, {
@@ -141,5 +146,5 @@ export function importResourceReturns(text: string): ImportReport<ResourceReturn
       );
     }
   }
-  return { imported, issues, rowsRead: rows.rowsRead };
+  return { imported, issues, rowsRead: order.length };
 }

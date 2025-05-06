@@ -20,6 +20,7 @@ import {
   loadNcrs,
   loadNotices,
   loadPayLessNotices,
+  outputFor,
   loadRecords,
   loadResourceReturns,
   loadSignOffs,
@@ -37,6 +38,7 @@ import {
   delayReportDto,
   importReportDto,
   moneyDto,
+  outputReportDto,
   periodDto,
   progressReportDto,
   stripDto,
@@ -124,6 +126,7 @@ export function buildServer(service: Service): FastifyInstance {
         defects: job.defects.count(),
         subcontracts: job.subcontracts.count(),
         paymentApplications: job.paymentApplications.count(),
+        resourceReturns: job.resourceReturns.count(),
       },
       blockers: jobBlockers(job),
     };
@@ -234,6 +237,7 @@ export function buildServer(service: Service): FastifyInstance {
   valuationRoute('delay', delayFor, delayReportDto);
   valuationRoute('defects', defectsFor, defectsReportDto);
   valuationRoute('payments', paymentsFor, subcontractReportDto);
+  valuationRoute('output', outputFor, outputReportDto);
 
   app.get('/valuations/:number/strip/:packageId', (request) => {
     const params = request.params as { number: string; packageId: string };

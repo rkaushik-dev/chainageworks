@@ -18,7 +18,7 @@ const csv = [
 describe('importResourceReturns', () => {
   it('groups the rows back into returns', () => {
     const report = importResourceReturns(csv);
-    expect(report.rowsRead).toBe(4);
+    expect(report.rowsRead).toBe(2);
     expect(report.imported).toHaveLength(2);
     expect(report.issues).toEqual([]);
   });

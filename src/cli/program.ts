@@ -23,6 +23,7 @@ import {
   loadNcrs,
   loadNotices,
   loadPayLessNotices,
+  outputFor,
   loadRecords,
   loadResourceReturns,
   loadSignOffs,
@@ -43,6 +44,7 @@ import {
 import { renderDefectsReport } from '../reporting/defectsReport.js';
 import { renderDelayReport } from '../reporting/delayReport.js';
 import { renderSubcontractReport } from '../reporting/subcontractReport.js';
+import { renderOutputReport } from '../reporting/outputReport.js';
 import { renderStrip } from '../reporting/stripMap.js';
 import { renderPairs, renderTable } from '../reporting/format/table.js';
 import type { Job } from '../store/job.js';
@@ -281,6 +283,15 @@ export function buildProgram(deps: CliDeps): Command {
   );
 
   valuationCommand(
+    'output',
+    'what the job produced for the hours it booked',
+    outputFor,
+    renderOutputReport,
+    (report) => report.totals.labourHours,
+    'no returns have been made',
+  );
+
+  valuationCommand(
     'payments',
     'the subcontract payment position and the notice diary',
     paymentsFor,
@@ -344,7 +355,7 @@ export function buildProgram(deps: CliDeps): Command {
     'returns',
     'load a labour and plant resource return export',
     loadResourceReturns,
-    'resource lines',
+    'resource returns',
   );
   importCommand(
     'pay-less',

@@ -28,6 +28,8 @@ import type { DefectsReport } from '../reporting/defectsReport.js';
 import { buildDefectsReport } from '../reporting/defectsReport.js';
 import type { DelayReport } from '../reporting/delayReport.js';
 import { buildDelayReport } from '../reporting/delayReport.js';
+import type { OutputReport } from '../reporting/outputReport.js';
+import { buildOutputReport } from '../reporting/outputReport.js';
 import type { ProgressReport } from '../reporting/progressReport.js';
 import { buildProgressReport } from '../reporting/progressReport.js';
 import type { SubcontractReport } from '../reporting/subcontractReport.js';
@@ -171,6 +173,24 @@ export function paymentsFor(service: Service, number: number): SubcontractReport
       notices: job.paymentNotices.all(),
       payLess: job.payLessNotices.all(),
     },
+    periodOf(service, number).cutOff,
+  );
+}
+
+/**
+ * What the job produced for the hours it booked, at a valuation cut-off.
+ *
+ * Never null. A job with no returns loaded has produced nothing for no hours,
+ * which is a true and useful answer, and it is different from a contract that
+ * fixes no such term at all.
+ */
+export function outputFor(service: Service, number: number): OutputReport {
+  const job = service.job;
+  return buildOutputReport(
+    contextOf(service),
+    job.packages.all(),
+    job.resourceReturns.all(),
+    job.settings.outputAllowances,
     periodOf(service, number).cutOff,
   );
 }

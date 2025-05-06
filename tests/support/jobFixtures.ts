@@ -6,7 +6,9 @@ import { buildDelayEvent } from '../../src/domain/delay/event.js';
 import { moneyFromMajor } from '../../src/domain/money/money.js';
 import { percent } from '../../src/domain/money/percent.js';
 import { buildPaymentTerms } from '../../src/domain/subcontract/payment.js';
+import { buildResourceReturn } from '../../src/domain/resource/return.js';
 import { buildSubcontract } from '../../src/domain/subcontract/subcontract.js';
+import { buildAllowances } from '../../src/progress/productivity.js';
 import { parseStation } from '../../src/domain/chainage/station.js';
 import { putAll } from '../../src/store/repository.js';
 import type { Job } from '../../src/store/job.js';
@@ -83,7 +85,72 @@ export function commercialJob(): Job {
       damagesCap: percent(10),
     }),
     defectsPeriodEnds: d('2025-06-30'),
+    outputAllowances: buildAllowances([
+      { stepId: 'strip', metresPerHour: 10 },
+      { stepId: 'excavate', metresPerHour: 12 },
+    ]),
   };
+
+  const gang = (count: number, hours: number) => ({
+    resourceId: 'GANG-EARTH',
+    description: 'earthworks gang',
+    count,
+    hours,
+    kind: 'working' as const,
+  });
+
+  job.resourceReturns.add(
+    buildResourceReturn({
+      id: 'RR-01',
+      packageId: 'WP-01',
+      stepId: 'strip',
+      date: d('2025-03-03'),
+      labour: [gang(6, 8)],
+      plant: [
+        { resourceId: 'PL-D6', description: 'dozer', count: 1, hours: 8, kind: 'working' },
+      ],
+      returnedBy: 'A Kerrigan',
+    }),
+  );
+  job.resourceReturns.add(
+    buildResourceReturn({
+      id: 'RR-02',
+      packageId: 'WP-01',
+      stepId: 'strip',
+      date: d('2025-03-04'),
+      labour: [gang(6, 8)],
+      returnedBy: 'A Kerrigan',
+    }),
+  );
+  job.resourceReturns.add(
+    buildResourceReturn({
+      id: 'RR-03',
+      packageId: 'WP-01',
+      stepId: 'excavate',
+      date: d('2025-03-10'),
+      labour: [gang(4, 10)],
+      plant: [
+        {
+          resourceId: 'PL-360',
+          description: '22t excavator',
+          count: 1,
+          hours: 4,
+          kind: 'standing',
+        },
+      ],
+      returnedBy: 'A Kerrigan',
+    }),
+  );
+  job.resourceReturns.add(
+    buildResourceReturn({
+      id: 'RR-04',
+      packageId: 'WP-01',
+      date: d('2025-03-11'),
+      labour: [gang(2, 8)],
+      returnedBy: 'A Kerrigan',
+      note: 'general site tidy, no step named',
+    }),
+  );
 
   job.delayEvents.add(
     buildDelayEvent({

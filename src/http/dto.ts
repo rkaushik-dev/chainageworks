@@ -10,6 +10,8 @@ import { formatSiteDate } from '../domain/time/siteDate.js';
 import type { ImportIssue, ImportReport } from '../ingest/report.js';
 import type { DefectsReport } from '../reporting/defectsReport.js';
 import type { DelayReport } from '../reporting/delayReport.js';
+import type { OutputReport } from '../reporting/outputReport.js';
+import { unallocatedHours } from '../reporting/outputReport.js';
 import { barredLines, claimedDays, unassessedLines } from '../reporting/delayReport.js';
 import type { SubcontractReport } from '../reporting/subcontractReport.js';
 import { rowsAccepted, rowsRejected } from '../ingest/report.js';
@@ -290,6 +292,41 @@ export function subcontractReportDto(report: SubcontractReport): Record<string, 
       noticeBy: formatSiteDate(entry.noticeBy),
       amount: entry.amount,
       missed: entry.missed,
+    })),
+  };
+}
+
+export function outputReportDto(report: OutputReport): Record<string, unknown> {
+  return {
+    asAt: formatSiteDate(report.asAt),
+    totals: report.totals,
+    lostFraction: Number(report.lostFraction.toFixed(4)),
+    unallocated: unallocatedHours(report),
+    behind: report.behind.map((entry) => ({
+      packageId: entry.packageId,
+      stepId: entry.step.stepId,
+      ratio: entry.step.ratio,
+    })),
+    barren: report.barren.map((entry) => ({
+      packageId: entry.packageId,
+      stepId: entry.step.stepId,
+      labourHours: entry.step.labourHours,
+    })),
+    packages: report.packages.map((output) => ({
+      packageId: output.packageId,
+      labourHours: output.labourHours,
+      plantHours: output.plantHours,
+      unallocatedHours: output.unallocatedHours,
+      steps: output.steps.map((step) => ({
+        stepId: step.stepId,
+        builtMetres: step.builtMetres,
+        labourHours: step.labourHours,
+        plantHours: step.plantHours,
+        lostHours: step.lostHours,
+        achieved: step.achieved,
+        allowed: step.allowed,
+        ratio: step.ratio,
+      })),
     })),
   };
 }
