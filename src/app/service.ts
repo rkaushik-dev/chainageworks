@@ -41,6 +41,8 @@ import { buildStripMap } from '../reporting/stripMap.js';
 import type { Job } from '../store/job.js';
 import { jobCalendar, jobContext, jobSchedule } from '../store/job.js';
 import { putAll } from '../store/repository.js';
+import type { CashPoint } from '../valuation/cashFlow.js';
+import { buildCashFlow } from '../valuation/cashFlow.js';
 import type { Certificate } from '../valuation/certificate.js';
 import { certifySeries } from '../valuation/certificate.js';
 import type { PeriodSchedule, ValuationPeriod } from '../valuation/period.js';
@@ -106,10 +108,17 @@ export function progressFor(service: Service, number: number): ProgressReport {
  * a previous figure is what stops two callers disagreeing about what was
  * certified last month.
  */
-export function certificateFor(service: Service, number: number): Certificate {
-  const schedule = scheduleOf(service, Math.max(number, DEFAULT_PERIODS));
+/**
+ * Every certificate from period one to the one asked for.
+ *
+ * Always run from the start, never from the period asked for. Each certificate
+ * takes the previous one's net figure off itself, so a series that began in
+ * the middle would pay the whole of the works again from that month.
+ */
+export function certificateSeries(service: Service, count: number): Certificate[] {
+  const schedule = scheduleOf(service, Math.max(count, DEFAULT_PERIODS));
   const settings = service.job.settings;
-  const series = certifySeries(schedule.periods.slice(0, number), {
+  return certifySeries(schedule.periods.slice(0, count), {
     context: contextOf(service),
     contractSum: settings.contractSum,
     retention: settings.retention,
@@ -122,11 +131,31 @@ export function certificateFor(service: Service, number: number): Certificate {
     substantialCompletionOn: settings.substantialCompletionOn,
     defectsCertificateOn: settings.defectsCertificateOn,
   });
-  const certificate = series[number - 1];
+}
+
+export function certificateFor(service: Service, number: number): Certificate {
+  const certificate = certificateSeries(service, number)[number - 1];
   if (certificate === undefined) {
     throw new BadInputError('the schedule does not reach that valuation', { number });
   }
   return certificate;
+}
+
+/**
+ * The cash forecast, run off the same certificates the job would issue.
+ *
+ * Built from the real series rather than from the baseline curve, because the
+ * question this answers is what will actually arrive, and the baseline is by
+ * definition what was hoped for before anything was measured.
+ */
+export function cashFlowFor(service: Service, count: number, latePeriods = 0): CashPoint[] {
+  const series = certificateSeries(service, count);
+  return buildCashFlow({
+    periods: series.map((certificate) => certificate.period),
+    certified: series.map((certificate) => certificate.netValuation),
+    currency: service.job.settings.currency,
+    latePeriods,
+  });
 }
 
 /**

@@ -10,6 +10,7 @@ import { formatSiteDate, tryParseSiteDate } from '../domain/time/siteDate.js';
 import { rateMajor } from '../domain/money/rate.js';
 import type { Service } from '../app/service.js';
 import {
+  cashFlowFor,
   certificateFor,
   contextOf,
   curveFor,
@@ -32,6 +33,7 @@ import {
 import { effectiveRecords } from '../domain/survey/record.js';
 import { jobBlockers } from '../store/job.js';
 import {
+  cashFlowDto,
   certificateDto,
   curveDto,
   defectsReportDto,
@@ -54,6 +56,19 @@ function numberParam(raw: unknown, what: string): number {
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 1) {
     throw new BadInputError(`${what} has to be a whole number from one`, { value: raw });
+  }
+  return value;
+}
+
+/** A query parameter that counts from zero, so nothing at all is allowed. */
+function fromZeroQuery(raw: unknown, what: string): number {
+  if (raw === undefined) return 0;
+  if (typeof raw !== 'string') {
+    throw new BadInputError(`${what} has to be a whole number from zero`, { what });
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new BadInputError(`${what} has to be a whole number from zero`, { value: raw });
   }
   return value;
 }
@@ -243,6 +258,22 @@ export function buildServer(service: Service): FastifyInstance {
     const params = request.params as { number: string; packageId: string };
     return stripDto(
       stripFor(service, params.packageId, numberParam(params.number, 'valuation')),
+    );
+  });
+
+  /**
+   * The late query is a what if, not a record of anything. It is on the report
+   * rather than on the job because the question is always asked twice, once
+   * against the terms and once against what the payer actually does.
+   */
+  app.get('/cash', (request) => {
+    const query = request.query as Record<string, unknown>;
+    return cashFlowDto(
+      cashFlowFor(
+        service,
+        countQuery(query['periods'], 12, 'periods'),
+        fromZeroQuery(query['late'], 'late'),
+      ),
     );
   });
 

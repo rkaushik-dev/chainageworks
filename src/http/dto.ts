@@ -19,6 +19,8 @@ import type { PackageLine, ProgressReport } from '../reporting/progressReport.js
 import type { CurvePoint } from '../reporting/sCurve.js';
 import type { StripMap } from '../reporting/stripMap.js';
 import { cellGlyph } from '../reporting/stripMap.js';
+import type { CashPoint } from '../valuation/cashFlow.js';
+import { peakExposure } from '../valuation/cashFlow.js';
 import type { Certificate } from '../valuation/certificate.js';
 import type { ValuationPeriod } from '../valuation/period.js';
 
@@ -327,6 +329,30 @@ export function outputReportDto(report: OutputReport): Record<string, unknown> {
         allowed: step.allowed,
         ratio: step.ratio,
       })),
+    })),
+  };
+}
+
+export function cashFlowDto(points: readonly CashPoint[]): Record<string, unknown> {
+  const peak = peakExposure(points);
+  return {
+    peak:
+      peak === null
+        ? null
+        : {
+            period: peak.period,
+            dueOn: formatSiteDate(peak.dueOn),
+            outstanding: moneyDto(peak.outstanding),
+          },
+    points: points.map((point) => ({
+      period: point.period,
+      cutOff: formatSiteDate(point.cutOff),
+      dueOn: formatSiteDate(point.dueOn),
+      certified: moneyDto(point.certified),
+      certificate: moneyDto(point.certificate),
+      receipt: moneyDto(point.receipt),
+      received: moneyDto(point.received),
+      outstanding: moneyDto(point.outstanding),
     })),
   };
 }

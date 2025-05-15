@@ -83,12 +83,21 @@ export function buildCashFlow(input: CashFlowInput): CashPoint[] {
   return points;
 }
 
-/** The most the job is ever owed at once, and the period it happens in. */
+/**
+ * The most the job is ever owed at once, and the period it happens in.
+ *
+ * Null when the job is never owed anything, rather than the first period with
+ * a zero against it. A caller asking for the peak is asking how much funding
+ * to arrange, and handing back a period holding nothing answers a question
+ * nobody asked.
+ */
 export function peakExposure(points: readonly CashPoint[]): CashPoint | null {
-  if (points.length === 0) return null;
-  return points.reduce((worst, point) =>
-    point.outstanding.minor > worst.outstanding.minor ? point : worst,
+  const worst = points.reduce<CashPoint | null>(
+    (found, point) =>
+      found === null || point.outstanding.minor > found.outstanding.minor ? point : found,
+    null,
   );
+  return worst === null || worst.outstanding.minor <= 0 ? null : worst;
 }
 
 export function totalReceipts(points: readonly CashPoint[], currency: CurrencyCode): Money {

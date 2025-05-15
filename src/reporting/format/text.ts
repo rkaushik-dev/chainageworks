@@ -8,6 +8,8 @@ import type { Certificate } from '../../valuation/certificate.js';
 import { describePeriod } from '../../valuation/period.js';
 import type { PackageLine, ProgressReport } from '../progressReport.js';
 import { heldLines, outstandingHoldPoints } from '../progressReport.js';
+import type { CashPoint } from '../../valuation/cashFlow.js';
+import { peakExposure } from '../../valuation/cashFlow.js';
 import type { CurvePoint } from '../sCurve.js';
 import type { Align } from './table.js';
 import { indent, renderHeading, renderPairs, renderTable } from './table.js';
@@ -180,5 +182,42 @@ export function renderReconciliation(report: ProgressReport): string {
       line.billed === null ? '' : formatQuantity(line.billed),
       line.allocated === null ? '' : formatQuantity(line.allocated),
     ]),
+  );
+}
+
+/**
+ * The cash forecast as a table, with the worst month called out under it.
+ *
+ * The peak is printed separately because it is the only line anybody acts on.
+ * A finance director reads this table to answer one question, which is how big
+ * the overdraft has to be, and that answer is one number in the middle of the
+ * table rather than the last row.
+ */
+export function renderCashFlow(points: readonly CashPoint[]): string {
+  const table = renderTable(
+    [
+      { heading: 'period', align: MONEY },
+      { heading: 'cut off' },
+      { heading: 'due' },
+      { heading: 'certificate', align: MONEY },
+      { heading: 'receipt', align: MONEY },
+      { heading: 'outstanding', align: MONEY },
+    ],
+    points.map((point) => [
+      String(point.period),
+      formatSiteDate(point.cutOff),
+      formatSiteDate(point.dueOn),
+      formatMoney(point.certificate),
+      formatMoney(point.receipt),
+      formatMoney(point.outstanding),
+    ]),
+  );
+  const peak = peakExposure(points);
+  if (peak === null) return table;
+  return (
+    `${table}
+
+most owed at once ${formatMoney(peak.outstanding)} ` +
+    `in period ${String(peak.period)}, due ${formatSiteDate(peak.dueOn)}`
   );
 }

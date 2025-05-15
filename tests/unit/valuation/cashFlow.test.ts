@@ -115,6 +115,10 @@ describe('peakExposure', () => {
   it('is null on an empty forecast', () => {
     expect(peakExposure([])).toBeNull();
   });
+
+  it('is null when the job is never owed anything', () => {
+    expect(peakExposure(onTime)).toBeNull();
+  });
 });
 
 describe('totalReceipts', () => {

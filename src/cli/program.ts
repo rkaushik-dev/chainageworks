@@ -11,6 +11,7 @@ import { billAsAt } from '../domain/bill/revision.js';
 import { parseSiteDate } from '../domain/time/siteDate.js';
 import type { Service } from '../app/service.js';
 import {
+  cashFlowFor,
   certificateFor,
   contextOf,
   createService,
@@ -36,6 +37,7 @@ import {
 import type { ImportReport } from '../ingest/report.js';
 import { formatImportReport, hasErrors, rowsAccepted, rowsRejected } from '../ingest/report.js';
 import {
+  renderCashFlow,
   renderCertificate,
   renderCurve,
   renderProgressReport,
@@ -299,6 +301,17 @@ export function buildProgram(deps: CliDeps): Command {
     (report) => report.positions.length,
     'no orders have been placed',
   );
+
+  program
+    .command('cash')
+    .description('what the certificates will bring in and when')
+    .option('-n, --periods <count>', 'how many periods', '12')
+    .option('--late <periods>', 'periods the payer runs behind', '0')
+    .action(async (options: { periods: string; late: string }) => {
+      const service = await serviceFor(deps, globals());
+      const points = cashFlowFor(service, Number(options.periods), Number(options.late));
+      emit(deps, globals(), renderCashFlow(points), points.length);
+    });
 
   program
     .command('curve')
