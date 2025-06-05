@@ -6,6 +6,9 @@ import type { Percent } from '../domain/money/percent.js';
 import type { ProgressContext } from '../progress/context.js';
 import type { PackageEarning } from '../progress/earn.js';
 import { earnAll } from '../progress/earn.js';
+import type { AdjustmentTerms, PriceAdjustment } from '../domain/fluctuation/adjustment.js';
+import { noAdjustment, priceAdjustment } from '../domain/fluctuation/adjustment.js';
+import type { IndexSeries } from '../domain/fluctuation/index.js';
 import type { DayworkSchedule } from '../domain/daywork/schedule.js';
 import type { DayworkSheet } from '../domain/daywork/sheet.js';
 import { dayworkValue } from '../domain/daywork/sheet.js';
@@ -25,6 +28,9 @@ export interface CertificateInput {
   readonly materialsAllowance?: Percent;
   readonly dayworkSchedule?: DayworkSchedule | null;
   readonly dayworkSheets?: readonly DayworkSheet[];
+  /** The fluctuation clause, when the contract carries one. */
+  readonly adjustment?: AdjustmentTerms | null;
+  readonly indices?: readonly IndexSeries[];
   /** The cumulative gross certified by the previous certificate. */
   readonly previouslyCertified: Money;
   readonly substantialCompletionOn?: SiteDate | null;
@@ -48,6 +54,8 @@ export interface Certificate {
   readonly materialsClaimed: readonly MaterialsOnSite[];
   /** Signed daywork, which is measured work that could not be measured. */
   readonly daywork: Money;
+  /** What the fluctuation clause added to, or took off, the permanent work. */
+  readonly priceAdjustment: PriceAdjustment;
   readonly gross: Money;
   readonly retention: RetentionState;
   readonly netValuation: Money;
@@ -82,7 +90,24 @@ export function buildCertificate(input: CertificateInput): Certificate {
     schedule === null
       ? zeroMoney(bill.currency)
       : dayworkValue(schedule, input.dayworkSheets ?? [], asAt);
-  const gross = addMoney(addMoney(measuredWork, materialsOnSite), daywork);
+  /**
+   * The formula moves the permanent work and nothing else.
+   *
+   * Materials on site are deliberately left out. They are paid at what the
+   * supplier actually invoiced, which already carries whatever the market did,
+   * and running them through an index as well pays the same movement twice.
+   */
+  const permanentWork = addMoney(measuredWork, daywork);
+  const terms = input.adjustment ?? null;
+  const adjustment =
+    terms === null
+      ? noAdjustment(permanentWork, asAt)
+      : priceAdjustment(terms, input.indices ?? [], permanentWork, asAt);
+
+  const gross = addMoney(
+    addMoney(addMoney(measuredWork, materialsOnSite), daywork),
+    adjustment.amount,
+  );
 
   const retention = computeRetention({
     grossValuation: gross,
@@ -102,6 +127,7 @@ export function buildCertificate(input: CertificateInput): Certificate {
     materialsOnSite,
     materialsClaimed: claimableMaterials(materials, asAt),
     daywork,
+    priceAdjustment: adjustment,
     gross,
     retention,
     netValuation,
@@ -136,4 +162,14 @@ export function certifySeries(
     previous = certificate.netValuation;
   }
   return out;
+}
+
+/** True when the certificate rests on an index figure that may still move. */
+export function restsOnProvisionalIndex(certificate: Certificate): boolean {
+  return certificate.priceAdjustment.provisional;
+}
+
+/** Certificates in a series that will have to be reworked when indices firm up. */
+export function provisionalCertificates(series: readonly Certificate[]): Certificate[] {
+  return series.filter(restsOnProvisionalIndex);
 }
