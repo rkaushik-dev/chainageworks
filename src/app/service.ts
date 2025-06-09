@@ -4,6 +4,7 @@ import type { BillItem } from '../domain/bill/billItem.js';
 import { firstRevision } from '../domain/bill/revision.js';
 import type { Ncr } from '../domain/itp/ncr.js';
 import type { Standdown } from '../domain/time/calendar.js';
+import type { IndexSeries } from '../domain/fluctuation/index.js';
 import type { ResourceReturn } from '../domain/resource/return.js';
 import type { SignOff } from '../domain/itp/signOff.js';
 import type {
@@ -20,6 +21,7 @@ import { importHolidays, importStanddowns } from '../ingest/diary.js';
 import { importNcrs, importSignOffs } from '../ingest/inspections.js';
 import { importApplications, importNotices, importPayLessNotices } from '../ingest/payments.js';
 import { importSurveyRecords } from '../ingest/records.js';
+import { importIndexSeries } from '../ingest/indices.js';
 import { importResourceReturns } from '../ingest/resources.js';
 import type { ImportReport } from '../ingest/report.js';
 import { hasErrors } from '../ingest/report.js';
@@ -128,6 +130,8 @@ export function certificateSeries(service: Service, count: number): Certificate[
       : { materialsAllowance: settings.materialsAllowance }),
     dayworkSchedule: settings.daywork,
     dayworkSheets: service.job.dayworkSheets.all(),
+    adjustment: settings.adjustment,
+    indices: service.job.indices.all(),
     substantialCompletionOn: settings.substantialCompletionOn,
     defectsCertificateOn: settings.defectsCertificateOn,
   });
@@ -339,6 +343,16 @@ export function loadPayLessNotices(
   const currency = service.job.settings.currency;
   return applyIfClean(importPayLessNotices(text, { currency }), options, (items) => {
     putAll(service.job.payLessNotices, items);
+  });
+}
+
+export function loadIndices(
+  service: Service,
+  text: string,
+  options: LoadOptions = {},
+): ImportReport<IndexSeries> {
+  return applyIfClean(importIndexSeries(text), options, (items) => {
+    putAll(service.job.indices, items);
   });
 }
 

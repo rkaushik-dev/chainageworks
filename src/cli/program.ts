@@ -21,6 +21,7 @@ import {
   loadApplications,
   loadDiary,
   loadHolidays,
+  loadIndices,
   loadNcrs,
   loadNotices,
   loadPayLessNotices,
@@ -364,6 +365,7 @@ export function buildProgram(deps: CliDeps): Command {
     'applications',
   );
   importCommand('notices', 'load the payment notices served', loadNotices, 'notices');
+  importCommand('indices', 'load a published cost index bulletin', loadIndices, 'index series');
   importCommand(
     'returns',
     'load a labour and plant resource return export',

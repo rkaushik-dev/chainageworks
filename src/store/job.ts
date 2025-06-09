@@ -22,6 +22,8 @@ import type {
   PaymentNotice,
 } from '../domain/subcontract/payment.js';
 import type { Subcontract } from '../domain/subcontract/subcontract.js';
+import type { AdjustmentTerms } from '../domain/fluctuation/adjustment.js';
+import type { IndexSeries } from '../domain/fluctuation/index.js';
 import type { ResourceReturn } from '../domain/resource/return.js';
 import type { SurveyRecord } from '../domain/survey/record.js';
 import type { ToleranceSet } from '../domain/survey/tolerance.js';
@@ -58,6 +60,8 @@ export interface JobSettings {
   readonly defectsPeriodEnds: SiteDate | null;
   /** What each step of a rule of credit was expected to produce in an hour. */
   readonly outputAllowances: readonly OutputAllowance[];
+  /** The fluctuation clause, when the contract carries one. */
+  readonly adjustment: AdjustmentTerms | null;
   readonly tolerances: ToleranceSet;
   readonly workingDays: readonly number[];
   readonly cutOffDay: number;
@@ -78,6 +82,7 @@ export interface JobSettingsInput {
   readonly completion?: CompletionTerms | null;
   readonly defectsPeriodEnds?: SiteDate | null;
   readonly outputAllowances?: readonly OutputAllowance[];
+  readonly adjustment?: AdjustmentTerms | null;
   readonly tolerances?: ToleranceSet;
   readonly workingDays?: readonly number[];
   readonly cutOffDay?: number;
@@ -115,6 +120,7 @@ export interface Job {
   readonly paymentNotices: Repository<PaymentNotice>;
   readonly payLessNotices: Repository<PayLessNotice>;
   readonly resourceReturns: Repository<ResourceReturn>;
+  readonly indices: Repository<IndexSeries>;
   holidays: readonly SiteDate[];
   standdowns: readonly Standdown[];
 }
@@ -145,6 +151,7 @@ export function jobSettings(input: JobSettingsInput): JobSettings {
     completion: input.completion ?? null,
     defectsPeriodEnds: input.defectsPeriodEnds ?? null,
     outputAllowances: buildAllowances(input.outputAllowances ?? []),
+    adjustment: input.adjustment ?? null,
     tolerances: input.tolerances ?? DEFAULT_TOLERANCES,
     workingDays: input.workingDays ?? DEFAULT_WORKING_DAYS,
     cutOffDay,
@@ -186,6 +193,7 @@ export function createJob(input: JobSettingsInput): Job {
       (n) => n.applicationId,
     ),
     resourceReturns: inMemoryRepository<ResourceReturn>('resource return', (r) => r.id),
+    indices: inMemoryRepository<IndexSeries>('index series', (i) => i.id),
     holidays: [],
     standdowns: [],
   };

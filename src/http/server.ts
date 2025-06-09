@@ -18,6 +18,7 @@ import {
   delayFor,
   loadApplications,
   loadDiary,
+  loadIndices,
   loadNcrs,
   loadNotices,
   loadPayLessNotices,
@@ -142,6 +143,7 @@ export function buildServer(service: Service): FastifyInstance {
         subcontracts: job.subcontracts.count(),
         paymentApplications: job.paymentApplications.count(),
         resourceReturns: job.resourceReturns.count(),
+        indices: job.indices.count(),
       },
       blockers: jobBlockers(job),
     };
@@ -307,6 +309,7 @@ export function buildServer(service: Service): FastifyInstance {
   importRoute('/import/applications', loadApplications);
   importRoute('/import/notices', loadNotices);
   importRoute('/import/returns', loadResourceReturns);
+  importRoute('/import/indices', loadIndices);
   importRoute('/import/pay-less', loadPayLessNotices);
 
   return app;

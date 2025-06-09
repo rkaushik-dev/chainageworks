@@ -6,6 +6,8 @@ import { buildDelayEvent } from '../../src/domain/delay/event.js';
 import { moneyFromMajor } from '../../src/domain/money/money.js';
 import { percent } from '../../src/domain/money/percent.js';
 import { buildPaymentTerms } from '../../src/domain/subcontract/payment.js';
+import { buildAdjustmentTerms } from '../../src/domain/fluctuation/adjustment.js';
+import { buildIndexSeries } from '../../src/domain/fluctuation/index.js';
 import { buildResourceReturn } from '../../src/domain/resource/return.js';
 import { buildSubcontract } from '../../src/domain/subcontract/subcontract.js';
 import { buildAllowances } from '../../src/progress/productivity.js';
@@ -243,5 +245,56 @@ export function commercialJob(): Job {
     servedOn: d('2025-03-28'),
     valued: gbp(85_000),
   });
+  return job;
+}
+
+/**
+ * The commercial job with a fluctuation clause and the bulletin behind it.
+ *
+ * A separate fixture rather than a flag on the last one, because a contract
+ * either has a price adjustment clause or it does not, and every figure on
+ * every certificate moves depending on which. Tests that do not care about the
+ * clause should not be quietly running against an adjusted valuation.
+ */
+export function fluctuatingJob(): Job {
+  const job = commercialJob();
+
+  job.indices.add(
+    buildIndexSeries({
+      id: 'IDX-LAB',
+      name: 'civil engineering labour',
+      readings: [
+        { year: 2024, month: 10, value: 100, provisional: false },
+        { year: 2024, month: 11, value: 101, provisional: false },
+        { year: 2024, month: 12, value: 102, provisional: false },
+        { year: 2025, month: 1, value: 105, provisional: false },
+        { year: 2025, month: 2, value: 110, provisional: false },
+        { year: 2025, month: 3, value: 120, provisional: true },
+      ],
+    }),
+  );
+  job.indices.add(
+    buildIndexSeries({
+      id: 'IDX-PLA',
+      name: 'plant hire',
+      readings: [
+        { year: 2024, month: 10, value: 200, provisional: false },
+        { year: 2025, month: 1, value: 210, provisional: false },
+        { year: 2025, month: 3, value: 205, provisional: false },
+      ],
+    }),
+  );
+
+  job.settings = {
+    ...job.settings,
+    adjustment: buildAdjustmentTerms({
+      baseDate: d('2024-10-25'),
+      nonAdjustable: percent(10),
+      weightings: [
+        { indexId: 'IDX-LAB', weight: percent(60) },
+        { indexId: 'IDX-PLA', weight: percent(30) },
+      ],
+    }),
+  };
   return job;
 }

@@ -134,6 +134,18 @@ export function certificateDto(certificate: Certificate): Record<string, unknown
     measuredWork: moneyDto(certificate.measuredWork),
     materialsOnSite: moneyDto(certificate.materialsOnSite),
     daywork: moneyDto(certificate.daywork),
+    priceAdjustment: {
+      factor: certificate.priceAdjustment.factor.factor,
+      adjustable: moneyDto(certificate.priceAdjustment.adjustable),
+      amount: moneyDto(certificate.priceAdjustment.amount),
+      provisional: certificate.priceAdjustment.provisional,
+      indices: certificate.priceAdjustment.factor.lines.map((line) => ({
+        indexId: line.indexId,
+        weight: percentDto(line.weight),
+        movement: line.movement,
+        provisional: line.provisional,
+      })),
+    },
     gross: moneyDto(certificate.gross),
     retention: {
       accrued: moneyDto(certificate.retention.accrued),

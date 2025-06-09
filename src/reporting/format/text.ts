@@ -133,6 +133,7 @@ export function renderCertificate(certificate: Certificate): string {
         ['measured work', formatMoney(certificate.measuredWork)],
         ['materials on site', formatMoney(certificate.materialsOnSite)],
         ['daywork', formatMoney(certificate.daywork)],
+        ...adjustmentRows(certificate),
         ['gross valuation', formatMoney(certificate.gross)],
         ['less retention', formatMoney(retention.held)],
         ['net valuation', formatMoney(certificate.netValuation)],
@@ -141,7 +142,27 @@ export function renderCertificate(certificate: Certificate): string {
       ],
     ),
     ...(retention.capReached ? ['', 'retention has reached its cap'] : []),
+    ...(certificate.priceAdjustment.provisional
+      ? ['', 'the price adjustment rests on a provisional index figure']
+      : []),
   ].join('\n');
+}
+
+/**
+ * The adjustment line is left off entirely when the contract has no
+ * fluctuation clause, rather than printed as nothing. A line reading zero
+ * invites the reader to ask which index produced it, and on a fixed price
+ * contract the answer is that there is no clause at all.
+ */
+function adjustmentRows(certificate: Certificate): string[][] {
+  const adjustment = certificate.priceAdjustment;
+  if (adjustment.factor.lines.length === 0) return [];
+  return [
+    [
+      `price adjustment at ${(adjustment.factor.factor * 100).toFixed(3)}%`,
+      formatMoney(adjustment.amount),
+    ],
+  ];
 }
 
 /** The bill of quantities as a priced page. */
