@@ -8,6 +8,8 @@ import { compareSiteDates } from '../time/siteDate.js';
 import type { PaymentApplication, PaymentTerms } from './payment.js';
 import { buildPaymentTerms, paymentPosition } from './payment.js';
 import type { PayLessNotice, PaymentNotice } from './payment.js';
+import type { ContraCharge, ContraPosition } from './contraCharge.js';
+import { applyContra, carriedForward, contraPosition } from './contraCharge.js';
 
 /**
  * A subcontract, and which of the main contract's work it covers.
@@ -92,7 +94,25 @@ export interface SubcontractPosition {
   readonly remaining: Money;
   /** Applications that defaulted to the applied for sum. */
   readonly defaulted: readonly string[];
+  /** The contra charges standing against the order. */
+  readonly contra: ContraPosition;
+  /** What actually leaves the bank once the set off is taken. */
+  readonly netOfContra: Money;
+  /** Set off that would not fit this time and waits for the next payment. */
+  readonly contraCarriedForward: Money;
 }
+
+/** Everything a position is worked out from, so callers do not order five lists. */
+export interface PositionInputs {
+  readonly applications: readonly PaymentApplication[];
+  readonly notices: readonly PaymentNotice[];
+  readonly payLess: readonly PayLessNotice[];
+  readonly contra?: readonly ContraCharge[];
+  /** Days to notify a contra charge that the order does not already cover. */
+  readonly contraNotifyDays?: number;
+}
+
+export const DEFAULT_CONTRA_NOTIFY_DAYS = 14;
 
 /**
  * Where a subcontract stands at a date.
@@ -104,13 +124,11 @@ export interface SubcontractPosition {
  */
 export function subcontractPosition(
   subcontract: Subcontract,
-  applications: readonly PaymentApplication[],
-  notices: readonly PaymentNotice[],
-  payLess: readonly PayLessNotice[],
+  inputs: PositionInputs,
   asAt: SiteDate,
 ): SubcontractPosition {
   const currency = subcontract.orderValue.currency;
-  const mine = applications
+  const mine = inputs.applications
     .filter(
       (a) => a.subcontractId === subcontract.id && compareSiteDates(a.appliedOn, asAt) <= 0,
     )
@@ -124,21 +142,33 @@ export function subcontractPosition(
     const position = paymentPosition(
       application,
       subcontract.terms,
-      notices.find((n) => n.applicationId === application.id) ?? null,
-      payLess.find((n) => n.applicationId === application.id) ?? null,
+      inputs.notices.find((n) => n.applicationId === application.id) ?? null,
+      inputs.payLess.find((n) => n.applicationId === application.id) ?? null,
     );
     certified = position.netOfRetention;
     paid.push(position.payable);
     if (position.byDefault) defaulted.push(application.id);
   }
 
+  const paidToDate = sumMoney(paid, currency);
+  const contra = contraPosition(
+    inputs.contra ?? [],
+    subcontract.id,
+    asAt,
+    inputs.contraNotifyDays ?? DEFAULT_CONTRA_NOTIFY_DAYS,
+    currency,
+  );
+
   return {
     subcontract,
     applications: mine.length,
     certifiedToDate: certified,
-    paidToDate: sumMoney(paid, currency),
+    paidToDate,
     remaining: subtractMoney(subcontract.orderValue, certified),
     defaulted,
+    contra,
+    netOfContra: applyContra(paidToDate, contra),
+    contraCarriedForward: carriedForward(paidToDate, contra),
   };
 }
 
@@ -165,8 +195,12 @@ export function overOrder(positions: readonly SubcontractPosition[]): Subcontrac
 
 export function describeSubcontract(position: SubcontractPosition): string {
   const state = position.remaining.minor < 0 ? 'over the order' : 'inside the order';
+  const contra =
+    position.contra.deductible.minor === 0
+      ? ''
+      : `, ${String(position.contra.deductible.minor / 100)} set off`;
   return (
     `${position.subcontract.id} ${position.subcontract.contractor}, ` +
-    `${String(position.applications)} applications, ${state}`
+    `${String(position.applications)} applications, ${state}${contra}`
   );
 }

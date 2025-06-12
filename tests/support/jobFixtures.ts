@@ -9,6 +9,7 @@ import { buildPaymentTerms } from '../../src/domain/subcontract/payment.js';
 import { buildAdjustmentTerms } from '../../src/domain/fluctuation/adjustment.js';
 import { buildIndexSeries } from '../../src/domain/fluctuation/index.js';
 import { buildResourceReturn } from '../../src/domain/resource/return.js';
+import { buildContraCharge } from '../../src/domain/subcontract/contraCharge.js';
 import { buildSubcontract } from '../../src/domain/subcontract/subcontract.js';
 import { buildAllowances } from '../../src/progress/productivity.js';
 import { parseStation } from '../../src/domain/chainage/station.js';
@@ -245,6 +246,42 @@ export function commercialJob(): Job {
     servedOn: d('2025-03-28'),
     valued: gbp(85_000),
   });
+
+  job.contraCharges.add(
+    buildContraCharge({
+      id: 'CC-01',
+      subcontractId: 'SC-EARTH',
+      reference: 'CC/2025/001',
+      reason: 'attendance',
+      description: 'crane time and banksman, week 9',
+      amount: gbp(1800),
+      incurredOn: d('2025-02-28'),
+    }),
+  );
+  job.contraCharges.add(
+    buildContraCharge({
+      id: 'CC-02',
+      subcontractId: 'SC-EARTH',
+      reference: 'CC/2025/002',
+      reason: 'rectification',
+      description: 'capping relaid at 12+500 outside tolerance',
+      amount: gbp(4200),
+      incurredOn: d('2025-03-04'),
+      notifiedOn: d('2025-03-10'),
+      disputed: true,
+    }),
+  );
+  job.contraCharges.add(
+    buildContraCharge({
+      id: 'CC-03',
+      subcontractId: 'SC-EARTH',
+      reference: 'CC/2025/003',
+      reason: 'damage',
+      description: 'kerb line struck by a dumper',
+      amount: gbp(950),
+      incurredOn: d('2025-03-01'),
+    }),
+  );
   return job;
 }
 

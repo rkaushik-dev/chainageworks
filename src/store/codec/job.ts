@@ -54,6 +54,8 @@ import {
 import {
   applicationFromJson,
   applicationToJson,
+  contraChargeFromJson,
+  contraChargeToJson,
   noticeFromJson,
   noticeToJson,
   payLessFromJson,
@@ -116,6 +118,7 @@ export interface JobDocument {
   readonly payLessNotices: readonly Record<string, unknown>[];
   readonly resourceReturns: readonly Record<string, unknown>[];
   readonly indices: readonly Record<string, unknown>[];
+  readonly contraCharges: readonly Record<string, unknown>[];
   readonly holidays: readonly string[];
   readonly standdowns: readonly Record<string, unknown>[];
 }
@@ -187,6 +190,7 @@ function settingsToJson(settings: JobSettings): Record<string, unknown> {
     outputAllowances: settings.outputAllowances.map(allowanceToJson),
     adjustment:
       settings.adjustment === null ? null : adjustmentTermsToJson(settings.adjustment),
+    contraNotifyDays: settings.contraNotifyDays,
     tolerances: settings.tolerances.rules.map((rule) => ({
       workClass: rule.workClass,
       allowance: percentToJson(rule.allowance),
@@ -599,6 +603,7 @@ export function jobToJson(job: Job): JobDocument {
     payLessNotices: job.payLessNotices.all().map(payLessToJson),
     resourceReturns: job.resourceReturns.all().map(resourceReturnToJson),
     indices: job.indices.all().map(indexSeriesToJson),
+    contraCharges: job.contraCharges.all().map(contraChargeToJson),
     holidays: job.holidays.map(dateToJson),
     standdowns: job.standdowns.map(standdownToJson),
   };
@@ -637,6 +642,7 @@ export function jobFromJson(value: unknown): Job {
       'output allowances',
     ).map(allowanceFromJson),
     adjustment: adjustmentTermsFromJson(settings['adjustment']),
+    contraNotifyDays: Number(settings['contraNotifyDays'] ?? 14),
     tolerances: {
       rules: arrayFromJson(settings['tolerances'], 'tolerance rules').map((entry) => {
         const rule = objectFromJson(entry, 'tolerance rule');
@@ -717,6 +723,10 @@ export function jobFromJson(value: unknown): Job {
   putAll(
     job.indices,
     arrayFromJson(doc['indices'] ?? [], 'index series').map(indexSeriesFromJson),
+  );
+  putAll(
+    job.contraCharges,
+    arrayFromJson(doc['contraCharges'] ?? [], 'contra charges').map(contraChargeFromJson),
   );
   job.holidays = arrayFromJson(doc['holidays'], 'holidays').map(dateFromJson);
   job.standdowns = arrayFromJson(doc['standdowns'], 'standdowns').map(standdownFromJson);

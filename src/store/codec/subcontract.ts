@@ -5,10 +5,14 @@ import type {
   PaymentTerms,
 } from '../../domain/subcontract/payment.js';
 import { buildPaymentTerms } from '../../domain/subcontract/payment.js';
+import { BadInputError } from '../../errors.js';
+import type { ContraCharge, ContraReason } from '../../domain/subcontract/contraCharge.js';
+import { buildContraCharge, CONTRA_REASONS } from '../../domain/subcontract/contraCharge.js';
 import type { Subcontract } from '../../domain/subcontract/subcontract.js';
 import { buildSubcontract } from '../../domain/subcontract/subcontract.js';
 import {
   arrayFromJson,
+  booleanFromJson,
   codeFromJson,
   codeToJson,
   dateFromJson,
@@ -17,6 +21,8 @@ import {
   moneyToJson,
   needString,
   objectFromJson,
+  optionalDateFromJson,
+  optionalDateToJson,
   optionalString,
   percentFromJson,
   percentToJson,
@@ -147,4 +153,42 @@ export function payLessFromJson(value: unknown): PayLessNotice {
     amount: moneyFromJson(raw['amount']),
     reason: needString(raw['reason'], 'pay less reason'),
   };
+}
+
+function reasonFromJson(value: unknown): ContraReason {
+  const text = needString(value ?? 'other', 'contra reason');
+  const found = CONTRA_REASONS.find((reason) => reason === text);
+  if (found === undefined) {
+    throw new BadInputError('not a reason for a contra charge this tool knows', { got: text });
+  }
+  return found;
+}
+
+export function contraChargeToJson(charge: ContraCharge): Record<string, unknown> {
+  return {
+    id: charge.id,
+    subcontractId: charge.subcontractId,
+    reference: charge.reference,
+    reason: charge.reason,
+    description: charge.description,
+    amount: moneyToJson(charge.amount),
+    incurredOn: dateToJson(charge.incurredOn),
+    notifiedOn: optionalDateToJson(charge.notifiedOn),
+    disputed: charge.disputed,
+  };
+}
+
+export function contraChargeFromJson(value: unknown): ContraCharge {
+  const raw = objectFromJson(value, 'contra charge');
+  return buildContraCharge({
+    id: needString(raw['id'], 'charge id'),
+    subcontractId: needString(raw['subcontractId'], 'subcontract id'),
+    reference: optionalString(raw['reference']),
+    reason: reasonFromJson(raw['reason']),
+    description: needString(raw['description'], 'description'),
+    amount: moneyFromJson(raw['amount']),
+    incurredOn: dateFromJson(raw['incurredOn']),
+    notifiedOn: optionalDateFromJson(raw['notifiedOn']),
+    disputed: booleanFromJson(raw['disputed'] ?? false, 'disputed'),
+  });
 }

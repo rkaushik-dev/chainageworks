@@ -21,7 +21,9 @@ import type {
   PaymentApplication,
   PaymentNotice,
 } from '../domain/subcontract/payment.js';
+import type { ContraCharge } from '../domain/subcontract/contraCharge.js';
 import type { Subcontract } from '../domain/subcontract/subcontract.js';
+import { DEFAULT_CONTRA_NOTIFY_DAYS } from '../domain/subcontract/subcontract.js';
 import type { AdjustmentTerms } from '../domain/fluctuation/adjustment.js';
 import type { IndexSeries } from '../domain/fluctuation/index.js';
 import type { ResourceReturn } from '../domain/resource/return.js';
@@ -62,6 +64,8 @@ export interface JobSettings {
   readonly outputAllowances: readonly OutputAllowance[];
   /** The fluctuation clause, when the contract carries one. */
   readonly adjustment: AdjustmentTerms | null;
+  /** Days to notify a subcontractor of a charge the order does not cover. */
+  readonly contraNotifyDays: number;
   readonly tolerances: ToleranceSet;
   readonly workingDays: readonly number[];
   readonly cutOffDay: number;
@@ -83,6 +87,7 @@ export interface JobSettingsInput {
   readonly defectsPeriodEnds?: SiteDate | null;
   readonly outputAllowances?: readonly OutputAllowance[];
   readonly adjustment?: AdjustmentTerms | null;
+  readonly contraNotifyDays?: number;
   readonly tolerances?: ToleranceSet;
   readonly workingDays?: readonly number[];
   readonly cutOffDay?: number;
@@ -121,6 +126,7 @@ export interface Job {
   readonly payLessNotices: Repository<PayLessNotice>;
   readonly resourceReturns: Repository<ResourceReturn>;
   readonly indices: Repository<IndexSeries>;
+  readonly contraCharges: Repository<ContraCharge>;
   holidays: readonly SiteDate[];
   standdowns: readonly Standdown[];
 }
@@ -152,6 +158,7 @@ export function jobSettings(input: JobSettingsInput): JobSettings {
     defectsPeriodEnds: input.defectsPeriodEnds ?? null,
     outputAllowances: buildAllowances(input.outputAllowances ?? []),
     adjustment: input.adjustment ?? null,
+    contraNotifyDays: input.contraNotifyDays ?? DEFAULT_CONTRA_NOTIFY_DAYS,
     tolerances: input.tolerances ?? DEFAULT_TOLERANCES,
     workingDays: input.workingDays ?? DEFAULT_WORKING_DAYS,
     cutOffDay,
@@ -194,6 +201,7 @@ export function createJob(input: JobSettingsInput): Job {
     ),
     resourceReturns: inMemoryRepository<ResourceReturn>('resource return', (r) => r.id),
     indices: inMemoryRepository<IndexSeries>('index series', (i) => i.id),
+    contraCharges: inMemoryRepository<ContraCharge>('contra charge', (c) => c.id),
     holidays: [],
     standdowns: [],
   };

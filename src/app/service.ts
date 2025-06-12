@@ -205,6 +205,8 @@ export function paymentsFor(service: Service, number: number): SubcontractReport
       applications: job.paymentApplications.all(),
       notices: job.paymentNotices.all(),
       payLess: job.payLessNotices.all(),
+      contra: job.contraCharges.all(),
+      contraNotifyDays: job.settings.contraNotifyDays,
     },
     periodOf(service, number).cutOff,
   );

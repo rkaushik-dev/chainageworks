@@ -64,6 +64,8 @@ const notices: PaymentNotice[] = [
   { applicationId: 'SA-03', servedOn: d('2025-04-28'), valued: gbp(100_000) },
 ];
 
+const inputs = { applications, notices, payLess: [] };
+
 describe('buildSubcontract', () => {
   it('keeps the packages and the priced items apart', () => {
     expect(subcontract.packageIds).toEqual(['WP-01', 'WP-02']);
@@ -139,13 +141,7 @@ describe('what a subcontract covers', () => {
 
 describe('subcontractPosition', () => {
   it('runs the applications in period order up to the date', () => {
-    const position = subcontractPosition(
-      subcontract,
-      applications,
-      notices,
-      [],
-      d('2025-03-25'),
-    );
+    const position = subcontractPosition(subcontract, inputs, d('2025-03-25'));
     expect(position.applications).toBe(3);
     expect(moneyMajor(position.certifiedToDate)).toBe(95_000);
     expect(moneyMajor(position.paidToDate)).toBe(95_000);
@@ -153,24 +149,12 @@ describe('subcontractPosition', () => {
   });
 
   it('names the application the payer let default', () => {
-    const position = subcontractPosition(
-      subcontract,
-      applications,
-      notices,
-      [],
-      d('2025-03-25'),
-    );
+    const position = subcontractPosition(subcontract, inputs, d('2025-03-25'));
     expect(position.defaulted).toEqual(['SA-02']);
   });
 
   it('leaves out an application made after the date', () => {
-    const position = subcontractPosition(
-      subcontract,
-      applications,
-      notices,
-      [],
-      d('2025-02-25'),
-    );
+    const position = subcontractPosition(subcontract, inputs, d('2025-02-25'));
     expect(position.applications).toBe(2);
     expect(moneyMajor(position.certifiedToDate)).toBe(85_500);
     expect(moneyMajor(position.remaining)).toBe(164_500);
@@ -180,9 +164,7 @@ describe('subcontractPosition', () => {
     const other = { ...applications[0]!, id: 'SA-99', subcontractId: 'SC-02' };
     const position = subcontractPosition(
       subcontract,
-      [...applications, other],
-      notices,
-      [],
+      { ...inputs, applications: [...applications, other] },
       d('2025-03-25'),
     );
     expect(position.applications).toBe(3);
@@ -191,16 +173,17 @@ describe('subcontractPosition', () => {
   it('lets a pay less notice cut what is paid without moving what is certified', () => {
     const position = subcontractPosition(
       subcontract,
-      applications,
-      notices,
-      [
-        {
-          applicationId: 'SA-03',
-          servedOn: d('2025-05-30'),
-          amount: gbp(2000),
-          reason: 'capping laid outside tolerance at 12+500',
-        },
-      ],
+      {
+        ...inputs,
+        payLess: [
+          {
+            applicationId: 'SA-03',
+            servedOn: d('2025-05-30'),
+            amount: gbp(2000),
+            reason: 'capping laid outside tolerance at 12+500',
+          },
+        ],
+      },
       d('2025-03-25'),
     );
     expect(moneyMajor(position.certifiedToDate)).toBe(95_000);
@@ -208,7 +191,11 @@ describe('subcontractPosition', () => {
   });
 
   it('is empty on an order nobody has applied against', () => {
-    const position = subcontractPosition(subcontract, [], [], [], d('2025-03-25'));
+    const position = subcontractPosition(
+      subcontract,
+      { applications: [], notices: [], payLess: [] },
+      d('2025-03-25'),
+    );
     expect(position.applications).toBe(0);
     expect(position.certifiedToDate.minor).toBe(0);
     expect(moneyMajor(position.remaining)).toBe(250_000);
@@ -225,12 +212,13 @@ describe('overOrder', () => {
       placedOn: d('2024-11-04'),
     });
     const positions = [
-      subcontractPosition(subcontract, applications, notices, [], d('2025-03-25')),
+      subcontractPosition(subcontract, inputs, d('2025-03-25')),
       subcontractPosition(
         small,
-        applications.map((a) => ({ ...a, subcontractId: 'SC-06' })),
-        notices,
-        [],
+        {
+          ...inputs,
+          applications: applications.map((a) => ({ ...a, subcontractId: 'SC-06' })),
+        },
         d('2025-03-25'),
       ),
     ];
@@ -251,13 +239,7 @@ describe('finding a subcontract', () => {
 
 describe('describeSubcontract', () => {
   it('says where the order stands in one line', () => {
-    const position = subcontractPosition(
-      subcontract,
-      applications,
-      notices,
-      [],
-      d('2025-03-25'),
-    );
+    const position = subcontractPosition(subcontract, inputs, d('2025-03-25'));
     expect(describeSubcontract(position)).toBe(
       'SC-01 Dowsett Plant Hire, 3 applications, inside the order',
     );

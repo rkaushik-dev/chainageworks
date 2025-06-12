@@ -10,6 +10,7 @@ import {
   noticesDue,
   paymentDates,
 } from '../domain/subcontract/payment.js';
+import type { ContraCharge } from '../domain/subcontract/contraCharge.js';
 import type { Subcontract, SubcontractPosition } from '../domain/subcontract/subcontract.js';
 import { overOrder, subcontractPosition } from '../domain/subcontract/subcontract.js';
 import type { SiteDate } from '../domain/time/siteDate.js';
@@ -35,6 +36,8 @@ export interface SubcontractReport {
   readonly overOrder: readonly SubcontractPosition[];
   /** What the missed notices have cost, as an amount over the payer's own valuation. */
   readonly exposure: string;
+  /** Contra charges that lost their right to be set off, across every order. */
+  readonly barredContra: readonly { subcontractId: string; amount: string }[];
 }
 
 export interface SubcontractInputs {
@@ -42,6 +45,8 @@ export interface SubcontractInputs {
   readonly applications: readonly PaymentApplication[];
   readonly notices: readonly PaymentNotice[];
   readonly payLess: readonly PayLessNotice[];
+  readonly contra?: readonly ContraCharge[];
+  readonly contraNotifyDays?: number;
 }
 
 /**
@@ -57,7 +62,19 @@ export function buildSubcontractReport(
   asAt: SiteDate,
 ): SubcontractReport {
   const positions = inputs.subcontracts.map((subcontract) =>
-    subcontractPosition(subcontract, inputs.applications, inputs.notices, inputs.payLess, asAt),
+    subcontractPosition(
+      subcontract,
+      {
+        applications: inputs.applications,
+        notices: inputs.notices,
+        payLess: inputs.payLess,
+        contra: inputs.contra ?? [],
+        ...(inputs.contraNotifyDays === undefined
+          ? {}
+          : { contraNotifyDays: inputs.contraNotifyDays }),
+      },
+      asAt,
+    ),
   );
 
   const diary: NoticeDiaryEntry[] = [];
@@ -95,6 +112,12 @@ export function buildSubcontractReport(
     positions,
     diary,
     overOrder: overOrder(positions),
+    barredContra: positions
+      .filter((position) => position.contra.barred.minor > 0)
+      .map((position) => ({
+        subcontractId: position.subcontract.id,
+        amount: formatMoney(position.contra.barred),
+      })),
     exposure: formatMoney({ ...zeroMoney(currency), minor: exposureMinor }),
   };
 }
@@ -108,6 +131,7 @@ export function renderSubcontractReport(report: SubcontractReport): string {
       ['notices outstanding', String(report.diary.filter((e) => !e.missed).length)],
       ['notices missed', String(report.diary.filter((e) => e.missed).length)],
       ['over the order', String(report.overOrder.length)],
+      ['set off barred', String(report.barredContra.length)],
       ['exposed by default', report.exposure],
     ]),
   ];
@@ -122,6 +146,8 @@ export function renderSubcontractReport(report: SubcontractReport): string {
           { heading: 'value', align: 'right' },
           { heading: 'certified', align: 'right' },
           { heading: 'paid', align: 'right' },
+          { heading: 'set off', align: 'right' },
+          { heading: 'net', align: 'right' },
           { heading: 'left', align: 'right' },
         ],
         report.positions.map((position) => [
@@ -130,6 +156,8 @@ export function renderSubcontractReport(report: SubcontractReport): string {
           formatMoney(position.subcontract.orderValue),
           formatMoney(position.certifiedToDate),
           formatMoney(position.paidToDate),
+          formatMoney(position.contra.deductible),
+          formatMoney(position.netOfContra),
           formatMoney(position.remaining),
         ]),
       ),
