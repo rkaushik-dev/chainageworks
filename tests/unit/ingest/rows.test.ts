@@ -3,7 +3,7 @@ import { BadInputError } from '../../../src/errors.js';
 import { need, needNumber } from '../../../src/ingest/fields.js';
 import { errors, rowsAccepted, rowsRejected, warnings } from '../../../src/ingest/report.js';
 import { issue } from '../../../src/ingest/report.js';
-import { readTable } from '../../../src/ingest/rows.js';
+import { readGrouped, readTable } from '../../../src/ingest/rows.js';
 
 interface Gang {
   readonly id: string;
@@ -103,6 +103,124 @@ describe('readTable', () => {
 
   it('reads a file with headings and no rows at all', () => {
     const report = readTable('gang,size', spec);
+    expect(report.rowsRead).toBe(0);
+    expect(report.imported).toEqual([]);
+    expect(report.issues).toEqual([]);
+  });
+});
+
+interface LoadRow {
+  readonly lorry: string;
+  readonly tonnes: number;
+  readonly tip: string;
+}
+
+interface Haul {
+  readonly lorry: string;
+  readonly tip: string;
+  readonly loads: number;
+  readonly tonnes: number;
+}
+
+const haulSpec = {
+  columns: ['lorry', 'tonnes', 'tip'] as const,
+  read: (reader: Parameters<typeof need>[0]): LoadRow => ({
+    lorry: need(reader, 'lorry'),
+    tonnes: needNumber(reader, 'tonnes'),
+    tip: need(reader, 'tip'),
+  }),
+  keyOf: (row: LoadRow) => row.lorry,
+  keyColumn: 'lorry',
+  agrees: (head: LoadRow, row: LoadRow) =>
+    head.tip === row.tip
+      ? null
+      : `${row.lorry} tipped at ${head.tip} on one row and ${row.tip} on another`,
+  build: (lorry: string, head: LoadRow, rows: readonly LoadRow[]): Haul => ({
+    lorry,
+    tip: head.tip,
+    loads: rows.length,
+    tonnes: rows.reduce((total, row) => total + row.tonnes, 0),
+  }),
+};
+
+const haulCsv = [
+  'lorry,tonnes,tip',
+  'LR-1,18,borrow pit',
+  'LR-2,20,borrow pit',
+  'LR-1,17,borrow pit',
+].join('\n');
+
+describe('readGrouped', () => {
+  it('groups the rows into one record each', () => {
+    const report = readGrouped(haulCsv, haulSpec);
+    expect(report.rowsRead).toBe(2);
+    expect(report.imported).toEqual([
+      { lorry: 'LR-1', tip: 'borrow pit', loads: 2, tonnes: 35 },
+      { lorry: 'LR-2', tip: 'borrow pit', loads: 1, tonnes: 20 },
+    ]);
+  });
+
+  it('keeps the groups in the order their first row appeared', () => {
+    const report = readGrouped(['lorry,tonnes,tip', 'LR-9,1,a', 'LR-2,1,a'].join('\n'), {
+      ...haulSpec,
+      agrees: () => null,
+    });
+    expect(report.imported.map((h) => h.lorry)).toEqual(['LR-9', 'LR-2']);
+  });
+
+  it('rejects the row that disagrees with the first of its group', () => {
+    const report = readGrouped(
+      ['lorry,tonnes,tip', 'LR-1,18,borrow pit', 'LR-1,17,stockpile'].join('\n'),
+      haulSpec,
+    );
+    expect(report.imported[0]!.loads).toBe(1);
+    expect(errors(report)[0]!.message).toContain('on one row and');
+    expect(errors(report)[0]!.column).toBe('lorry');
+  });
+
+  it('keeps every row of a group when nothing checks agreement', () => {
+    const report = readGrouped(
+      ['lorry,tonnes,tip', 'LR-1,18,borrow pit', 'LR-1,17,stockpile'].join('\n'),
+      {
+        columns: haulSpec.columns,
+        read: haulSpec.read,
+        keyOf: haulSpec.keyOf,
+        build: haulSpec.build,
+      },
+    );
+    expect(report.imported[0]!.loads).toBe(2);
+    expect(report.issues).toEqual([]);
+  });
+
+  it('leaves out the row it could not read and keeps the group', () => {
+    const report = readGrouped(
+      ['lorry,tonnes,tip', 'LR-1,18,borrow pit', 'LR-1,lots,borrow pit'].join('\n'),
+      haulSpec,
+    );
+    expect(report.imported[0]!.loads).toBe(1);
+    expect(errors(report)[0]!.line).toBe(3);
+  });
+
+  it('turns a refusal from the builder into an issue against the group', () => {
+    const report = readGrouped(haulCsv, {
+      ...haulSpec,
+      build: (lorry) => {
+        if (lorry === 'LR-2') throw new BadInputError('LR-2 was off the road that week');
+        return { lorry, tip: 'borrow pit', loads: 0, tonnes: 0 };
+      },
+    });
+    expect(report.imported).toHaveLength(1);
+    expect(errors(report)[0]!.message).toBe('LR-2 was off the road that week');
+  });
+
+  it('reports the missing column once and reads nothing', () => {
+    const report = readGrouped('lorry,tonnes\nLR-1,18', haulSpec);
+    expect(report.rowsRead).toBe(0);
+    expect(errors(report)[0]!.message).toContain('no tip column');
+  });
+
+  it('reads a file with headings and no rows at all', () => {
+    const report = readGrouped('lorry,tonnes,tip', haulSpec);
     expect(report.rowsRead).toBe(0);
     expect(report.imported).toEqual([]);
     expect(report.issues).toEqual([]);

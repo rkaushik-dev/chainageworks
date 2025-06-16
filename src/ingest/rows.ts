@@ -62,3 +62,85 @@ export function readTable<T>(text: string, spec: RowImport<T>): ImportReport<T> 
   }
   return { imported, issues, rowsRead: table.rows.length };
 }
+
+export interface GroupedImport<Row, T> {
+  readonly columns: readonly string[];
+  readonly read: (reader: RowReader, issues: ImportIssue[]) => Row;
+  /** Which record a row belongs to. Rows sharing a key become one record. */
+  readonly keyOf: (row: Row) => string;
+  /**
+   * Whether a later row agrees with the first row of its group. Return the
+   * complaint when it does not, or null when it does.
+   */
+  readonly agrees?: (head: Row, row: Row) => string | null;
+  readonly build: (key: string, head: Row, rows: readonly Row[]) => T;
+  /** The column a grouping complaint is filed against. */
+  readonly keyColumn?: string;
+}
+
+/**
+ * Read a csv where several rows make one record.
+ *
+ * A resource return is one sheet with many gang and plant lines on it, and a
+ * cost index is one series with many months in it. Site systems export both
+ * flat, so the grouping has to happen somewhere, and doing it once here keeps
+ * the two importers from drifting apart the way the row loops did.
+ *
+ * Groups come back in the order their first row appeared, not sorted, because
+ * that order is the order the file was written in and it is what a person
+ * reading the issues alongside the file expects.
+ *
+ * The report counts records rather than rows. A count of rows would say four
+ * when two returns were loaded, and row level problems are still reported as
+ * issues against their own line, so nothing is lost by counting the larger
+ * thing.
+ */
+export function readGrouped<Row, T>(
+  text: string,
+  spec: GroupedImport<Row, T>,
+): ImportReport<T> {
+  const rows = readTable<Row>(text, { columns: spec.columns, read: spec.read });
+  if (rows.imported.length === 0) {
+    return { imported: [], issues: rows.issues, rowsRead: 0 };
+  }
+
+  const issues: ImportIssue[] = [...rows.issues];
+  const order: string[] = [];
+  const heads = new Map<string, Row>();
+  const grouped = new Map<string, Row[]>();
+
+  for (const row of rows.imported) {
+    const key = spec.keyOf(row);
+    const head = heads.get(key);
+    if (head === undefined) {
+      order.push(key);
+      heads.set(key, row);
+      grouped.set(key, []);
+    } else {
+      const complaint = spec.agrees?.(head, row) ?? null;
+      if (complaint !== null) {
+        issues.push(issue(complaint, null, spec.keyColumn ?? spec.columns[0] ?? 'row'));
+        continue;
+      }
+    }
+    grouped.get(key)?.push(row);
+  }
+
+  const imported: T[] = [];
+  for (const key of order) {
+    const head = heads.get(key);
+    if (head === undefined) continue;
+    try {
+      imported.push(spec.build(key, head, grouped.get(key) ?? []));
+    } catch (error) {
+      issues.push(
+        issue(
+          error instanceof Error ? error.message : String(error),
+          null,
+          spec.keyColumn ?? spec.columns[0] ?? 'row',
+        ),
+      );
+    }
+  }
+  return { imported, issues, rowsRead: order.length };
+}

@@ -1,9 +1,8 @@
 import type { IndexReading, IndexSeries } from '../domain/fluctuation/index.js';
 import { buildIndexSeries } from '../domain/fluctuation/index.js';
 import { need, needFlag, needNumber, optional } from './fields.js';
-import type { ImportIssue, ImportReport } from './report.js';
-import { issue } from './report.js';
-import { readTable } from './rows.js';
+import type { ImportReport } from './report.js';
+import { readGrouped } from './rows.js';
 
 export const INDEX_COLUMNS = ['index', 'year', 'month', 'value'] as const;
 
@@ -22,7 +21,7 @@ interface IndexRow {
  * account on a number that is still going to move.
  */
 export function importIndexSeries(text: string): ImportReport<IndexSeries> {
-  const rows = readTable<IndexRow>(text, {
+  return readGrouped<IndexRow, IndexSeries>(text, {
     columns: INDEX_COLUMNS,
     read: (reader) => ({
       seriesId: need(reader, 'index'),
@@ -34,36 +33,13 @@ export function importIndexSeries(text: string): ImportReport<IndexSeries> {
         provisional: needFlag(reader, 'provisional', false),
       },
     }),
+    keyOf: (row) => row.seriesId,
+    keyColumn: 'index',
+    build: (id, head, rows) =>
+      buildIndexSeries({
+        id,
+        ...(head.name === '' ? {} : { name: head.name }),
+        readings: rows.map((row) => row.reading),
+      }),
   });
-
-  const issues: ImportIssue[] = [...rows.issues];
-  const order: string[] = [];
-  const names = new Map<string, string>();
-  const readings = new Map<string, IndexReading[]>();
-
-  for (const row of rows.imported) {
-    if (!readings.has(row.seriesId)) {
-      order.push(row.seriesId);
-      readings.set(row.seriesId, []);
-      names.set(row.seriesId, row.name);
-    }
-    readings.get(row.seriesId)?.push(row.reading);
-  }
-
-  const imported: IndexSeries[] = [];
-  for (const id of order) {
-    try {
-      const name = names.get(id) ?? '';
-      imported.push(
-        buildIndexSeries({
-          id,
-          ...(name === '' ? {} : { name }),
-          readings: readings.get(id) ?? [],
-        }),
-      );
-    } catch (error) {
-      issues.push(issue(error instanceof Error ? error.message : String(error), null, 'index'));
-    }
-  }
-  return { imported, issues, rowsRead: order.length };
 }

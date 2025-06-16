@@ -3,9 +3,8 @@ import { buildResourceReturn, HOUR_KINDS } from '../domain/resource/return.js';
 import type { SiteDate } from '../domain/time/siteDate.js';
 import { formatSiteDate } from '../domain/time/siteDate.js';
 import { need, needDate, needNumber, needOneOf, optional } from './fields.js';
-import type { ImportIssue, ImportReport } from './report.js';
-import { issue } from './report.js';
-import { readTable } from './rows.js';
+import type { ImportReport } from './report.js';
+import { readGrouped } from './rows.js';
 
 export const RESOURCE_COLUMNS = [
   'return',
@@ -86,65 +85,28 @@ function readHourKind(reader: Parameters<typeof need>[0]): HourKind {
  * line, so nothing is lost by counting the larger thing.
  */
 export function importResourceReturns(text: string): ImportReport<ResourceReturn> {
-  const rows = readTable<ResourceRow>(text, {
+  return readGrouped<ResourceRow, ResourceReturn>(text, {
     columns: RESOURCE_COLUMNS,
     read: readRow,
+    keyOf: (row) => row.returnId,
+    keyColumn: 'return',
+    agrees: (head, row) =>
+      head.packageId === row.packageId && head.date === row.date
+        ? null
+        : `return ${row.returnId} is against ${head.packageId} on ` +
+          `${formatSiteDate(head.date)} on one row and ` +
+          `${row.packageId} on ${formatSiteDate(row.date)} on another`,
+    build: (id, head, rows) =>
+      buildResourceReturn({
+        id,
+        packageId: head.packageId,
+        stepId: head.stepId,
+        date: head.date,
+        shift: head.shift,
+        labour: rows.filter((row) => row.side === 'labour').map((row) => row.line),
+        plant: rows.filter((row) => row.side === 'plant').map((row) => row.line),
+        returnedBy: head.returnedBy,
+        note: head.note,
+      }),
   });
-  if (rows.rowsRead === 0 || rows.imported.length === 0) {
-    return { imported: [], issues: rows.issues, rowsRead: rows.rowsRead };
-  }
-
-  const issues: ImportIssue[] = [...rows.issues];
-  const order: string[] = [];
-  const heads = new Map<string, ResourceRow>();
-  const labour = new Map<string, ResourceLine[]>();
-  const plant = new Map<string, ResourceLine[]>();
-
-  for (const row of rows.imported) {
-    const head = heads.get(row.returnId);
-    if (head === undefined) {
-      order.push(row.returnId);
-      heads.set(row.returnId, row);
-      labour.set(row.returnId, []);
-      plant.set(row.returnId, []);
-    } else if (head.packageId !== row.packageId || head.date !== row.date) {
-      issues.push(
-        issue(
-          `return ${row.returnId} is against ${head.packageId} on ` +
-            `${formatSiteDate(head.date)} on one row and ` +
-            `${row.packageId} on ${formatSiteDate(row.date)} on another`,
-          null,
-          'return',
-        ),
-      );
-      continue;
-    }
-    (row.side === 'plant' ? plant : labour).get(row.returnId)?.push(row.line);
-  }
-
-  const imported: ResourceReturn[] = [];
-  for (const id of order) {
-    const head = heads.get(id);
-    if (head === undefined) continue;
-    try {
-      imported.push(
-        buildResourceReturn({
-          id,
-          packageId: head.packageId,
-          stepId: head.stepId,
-          date: head.date,
-          shift: head.shift,
-          labour: labour.get(id) ?? [],
-          plant: plant.get(id) ?? [],
-          returnedBy: head.returnedBy,
-          note: head.note,
-        }),
-      );
-    } catch (error) {
-      issues.push(
-        issue(error instanceof Error ? error.message : String(error), null, 'return'),
-      );
-    }
-  }
-  return { imported, issues, rowsRead: order.length };
 }
