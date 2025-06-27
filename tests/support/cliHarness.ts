@@ -9,6 +9,8 @@ export interface CliRun {
   readonly out: string;
   readonly err: string;
   readonly saved: readonly { path: string; job: Job }[];
+  /** Everything the run wrote, keyed by the path it was asked to write to. */
+  readonly written: Readonly<Record<string, string>>;
 }
 
 export interface HarnessOptions {
@@ -33,6 +35,7 @@ export async function runCommand(
   const out: string[] = [];
   const err: string[] = [];
   const saved: { path: string; job: Job }[] = [];
+  const written: Record<string, string> = {};
   const job = options.job ?? sampleJob();
 
   const deps: CliDeps = {
@@ -52,11 +55,15 @@ export async function runCommand(
       }
       return Promise.resolve(text);
     },
+    writeText: (path: string, text: string) => {
+      written[path] = text;
+      return Promise.resolve();
+    },
     out: (text: string) => out.push(text),
     err: (text: string) => err.push(text),
     env: options.env ?? {},
   };
 
   const code = await runCli(argv, deps);
-  return { code, out: out.join('\n'), err: err.join('\n'), saved };
+  return { code, out: out.join('\n'), err: err.join('\n'), saved, written };
 }

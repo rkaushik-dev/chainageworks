@@ -38,6 +38,11 @@ import {
 import type { ImportReport } from '../ingest/report.js';
 import { formatImportReport, hasErrors, rowsAccepted, rowsRejected } from '../ingest/report.js';
 import {
+  certificateMarkdown,
+  progressMarkdown,
+  subcontractMarkdown,
+} from '../reporting/format/markdown.js';
+import {
   renderCashFlow,
   renderCertificate,
   renderCurve,
@@ -65,6 +70,7 @@ export interface CliDeps {
   readonly loadJob: (path: string) => Promise<Job>;
   readonly saveJob: (job: Job, path: string) => Promise<void>;
   readonly readText: (path: string) => Promise<string>;
+  readonly writeText: (path: string, text: string) => Promise<void>;
   readonly out: (text: string) => void;
   readonly err: (text: string) => void;
   readonly env: Record<string, string | undefined>;
@@ -73,6 +79,7 @@ export interface CliDeps {
 interface GlobalOptions {
   readonly file?: string;
   readonly json?: boolean;
+  readonly markdown?: boolean;
 }
 
 function configFor(deps: CliDeps, options: GlobalOptions): Config {
@@ -111,6 +118,7 @@ export function buildProgram(deps: CliDeps): Command {
     .description('progress measurement and interim valuation for linear civil works')
     .option('-f, --file <path>', 'the job file to read')
     .option('--json', 'print json rather than text')
+    .option('--markdown', 'print markdown rather than plain text')
     .exitOverride()
     .configureOutput({
       writeOut: (text) => {
@@ -224,6 +232,7 @@ export function buildProgram(deps: CliDeps): Command {
     render: (report: T) => string,
     summarise: (report: T) => unknown,
     absent: string,
+    markdown?: (report: T) => string,
   ): void {
     program
       .command(`${name} <valuation>`)
@@ -235,7 +244,9 @@ export function buildProgram(deps: CliDeps): Command {
           emit(deps, globals(), absent, null);
           return;
         }
-        emit(deps, globals(), render(report), summarise(report));
+        const wantsMarkdown = globals().markdown === true && markdown !== undefined;
+        const text = wantsMarkdown ? markdown(report) : render(report);
+        emit(deps, globals(), text, summarise(report));
       });
   }
 
@@ -246,6 +257,7 @@ export function buildProgram(deps: CliDeps): Command {
     renderProgressReport,
     (report) => report.period.number,
     'no such valuation',
+    progressMarkdown,
   );
 
   valuationCommand(
@@ -255,6 +267,7 @@ export function buildProgram(deps: CliDeps): Command {
     renderCertificate,
     (certificate) => certificate.period.number,
     'no such valuation',
+    certificateMarkdown,
   );
 
   program
@@ -301,6 +314,7 @@ export function buildProgram(deps: CliDeps): Command {
     renderSubcontractReport,
     (report) => report.positions.length,
     'no orders have been placed',
+    subcontractMarkdown,
   );
 
   program
@@ -378,6 +392,34 @@ export function buildProgram(deps: CliDeps): Command {
     loadPayLessNotices,
     'pay less notices',
   );
+
+  /**
+   * Write the month's pack out as a set of markdown files.
+   *
+   * One file a report rather than one long document, because the three go to
+   * three different people. The client gets the certificate, the project
+   * manager gets the progress report, and only the commercial team ever wants
+   * the subcontract position.
+   */
+  program
+    .command('export <valuation> <directory>')
+    .description('write the valuation pack out as markdown')
+    .action(async (valuation: string, directory: string) => {
+      const service = await serviceFor(deps, globals());
+      const number = Number(valuation);
+      const written: string[] = [];
+      const files: readonly [string, string][] = [
+        ['progress.md', progressMarkdown(progressFor(service, number))],
+        ['certificate.md', certificateMarkdown(certificateFor(service, number))],
+        ['payments.md', subcontractMarkdown(paymentsFor(service, number))],
+      ];
+      for (const [name, text] of files) {
+        const path = `${directory}/${name}`;
+        await deps.writeText(path, text);
+        written.push(path);
+      }
+      emit(deps, globals(), written.join('\n'), written);
+    });
 
   program
     .command('reconcile')

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { runCli } from '../cli/program.js';
 import { loadJob, saveJob } from '../store/fileStore.js';
 
@@ -14,6 +15,10 @@ const code = await runCli(process.argv.slice(2), {
   loadJob,
   saveJob: (job, path) => saveJob(job, path),
   readText: (path) => readFile(path, 'utf8'),
+  writeText: async (path, text) => {
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, text, 'utf8');
+  },
   out: (text) => {
     process.stdout.write(`${text}\n`);
   },
