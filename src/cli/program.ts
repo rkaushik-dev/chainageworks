@@ -25,6 +25,7 @@ import {
   loadNcrs,
   loadNotices,
   loadPayLessNotices,
+  lookaheadFrom,
   outputFor,
   loadRecords,
   loadResourceReturns,
@@ -52,6 +53,7 @@ import {
 import { renderDefectsReport } from '../reporting/defectsReport.js';
 import { renderDelayReport } from '../reporting/delayReport.js';
 import { renderSubcontractReport } from '../reporting/subcontractReport.js';
+import { chaseInspections, renderLookahead } from '../reporting/lookaheadReport.js';
 import { renderOutputReport } from '../reporting/outputReport.js';
 import { renderStrip } from '../reporting/stripMap.js';
 import { renderPairs, renderTable } from '../reporting/format/table.js';
@@ -316,6 +318,28 @@ export function buildProgram(deps: CliDeps): Command {
     'no orders have been placed',
     subcontractMarkdown,
   );
+
+  program
+    .command('lookahead <from>')
+    .description('what the next few weeks have to get through')
+    .option('-w, --weeks <count>', 'how many weeks', '4')
+    .option('-g, --gangs <count>', 'gangs available for each step', '1')
+    .option('--chase', 'print only the inspections holding work up')
+    .action(
+      async (from: string, options: { weeks: string; gangs: string; chase?: boolean }) => {
+        const service = await serviceFor(deps, globals());
+        const plan = lookaheadFrom(service, parseSiteDate(from), {
+          weeks: Number(options.weeks),
+          gangs: Number(options.gangs),
+        });
+        if (options.chase === true) {
+          const chase = chaseInspections(plan);
+          emit(deps, globals(), chase.join('\n'), chase);
+          return;
+        }
+        emit(deps, globals(), renderLookahead(plan), plan.steps.length);
+      },
+    );
 
   program
     .command('cash')

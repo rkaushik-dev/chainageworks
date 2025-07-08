@@ -10,6 +10,8 @@ import { formatSiteDate } from '../domain/time/siteDate.js';
 import type { ImportIssue, ImportReport } from '../ingest/report.js';
 import type { DefectsReport } from '../reporting/defectsReport.js';
 import type { DelayReport } from '../reporting/delayReport.js';
+import type { Lookahead } from '../progress/lookahead.js';
+import { fitsInWindow, readyNow, waitingOnInspection } from '../progress/lookahead.js';
 import type { OutputReport } from '../reporting/outputReport.js';
 import { unallocatedHours } from '../reporting/outputReport.js';
 import { barredLines, claimedDays, unassessedLines } from '../reporting/delayReport.js';
@@ -381,6 +383,29 @@ export function cashFlowDto(points: readonly CashPoint[]): Record<string, unknow
       receipt: moneyDto(point.receipt),
       received: moneyDto(point.received),
       outstanding: moneyDto(point.outstanding),
+    })),
+  };
+}
+
+export function lookaheadDto(lookahead: Lookahead): Record<string, unknown> {
+  return {
+    from: formatSiteDate(lookahead.from),
+    to: formatSiteDate(lookahead.to),
+    workingDays: lookahead.workingDays,
+    daysOfWork: Number(lookahead.daysOfWork.toFixed(3)),
+    fitsInWindow: fitsInWindow(lookahead),
+    ready: readyNow(lookahead).map((step) => `${step.packageId}/${step.stepId}`),
+    heldForInspection: waitingOnInspection(lookahead).map(
+      (step) => `${step.packageId}/${step.stepId}`,
+    ),
+    steps: lookahead.steps.map((step) => ({
+      packageId: step.packageId,
+      stepId: step.stepId,
+      remaining: step.remaining.map(formatChainageRange),
+      remainingMetres: step.remainingMetres,
+      days: step.days,
+      waitingOn: [...step.waitingOn],
+      heldPoints: [...step.heldPoints],
     })),
   };
 }

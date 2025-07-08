@@ -30,6 +30,8 @@ import type { DefectsReport } from '../reporting/defectsReport.js';
 import { buildDefectsReport } from '../reporting/defectsReport.js';
 import type { DelayReport } from '../reporting/delayReport.js';
 import { buildDelayReport } from '../reporting/delayReport.js';
+import type { Lookahead } from '../progress/lookahead.js';
+import { buildLookahead } from '../progress/lookahead.js';
 import type { OutputReport } from '../reporting/outputReport.js';
 import { buildOutputReport } from '../reporting/outputReport.js';
 import type { ProgressReport } from '../reporting/progressReport.js';
@@ -228,6 +230,35 @@ export function outputFor(service: Service, number: number): OutputReport {
     job.settings.outputAllowances,
     periodOf(service, number).cutOff,
   );
+}
+
+export interface LookaheadOptions {
+  readonly weeks?: number;
+  readonly gangs?: number;
+}
+
+/**
+ * The lookahead from a date, which is deliberately not a valuation number.
+ *
+ * A valuation is a backward looking thing measured to a cut-off, and a
+ * lookahead is a forward looking thing that usually starts today. Tying it to
+ * the valuation schedule would make it impossible to ask the only question
+ * anybody asks of it, which is what the next four weeks hold.
+ */
+export function lookaheadFrom(
+  service: Service,
+  from: SiteDate,
+  options: LookaheadOptions = {},
+): Lookahead {
+  return buildLookahead({
+    context: contextOf(service),
+    packages: service.job.packages.all(),
+    calendar: jobCalendar(service.job),
+    allowances: service.job.settings.outputAllowances,
+    from,
+    ...(options.weeks === undefined ? {} : { weeks: options.weeks }),
+    ...(options.gangs === undefined ? {} : { gangs: options.gangs }),
+  });
 }
 
 export function curveFor(service: Service, count: number, baseline?: Baseline): CurvePoint[] {

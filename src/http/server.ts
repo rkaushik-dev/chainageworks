@@ -22,6 +22,7 @@ import {
   loadNcrs,
   loadNotices,
   loadPayLessNotices,
+  lookaheadFrom,
   outputFor,
   loadRecords,
   loadResourceReturns,
@@ -40,6 +41,7 @@ import {
   defectsReportDto,
   delayReportDto,
   importReportDto,
+  lookaheadDto,
   moneyDto,
   outputReportDto,
   periodDto,
@@ -268,6 +270,23 @@ export function buildServer(service: Service): FastifyInstance {
    * rather than on the job because the question is always asked twice, once
    * against the terms and once against what the payer actually does.
    */
+  /**
+   * The lookahead is the one report keyed on a date rather than a valuation,
+   * and it defaults to the first cut-off rather than to today. Nothing this
+   * server answers means "now", so that two people running the same query on
+   * different days get the same answer.
+   */
+  app.get('/lookahead', (request) => {
+    const query = request.query as Record<string, unknown>;
+    const from = dateQuery(query['from'], scheduleOf(service, 1).periods[0]!.cutOff);
+    return lookaheadDto(
+      lookaheadFrom(service, from, {
+        weeks: countQuery(query['weeks'], 4, 'weeks'),
+        gangs: countQuery(query['gangs'], 1, 'gangs'),
+      }),
+    );
+  });
+
   app.get('/cash', (request) => {
     const query = request.query as Record<string, unknown>;
     return cashFlowDto(
