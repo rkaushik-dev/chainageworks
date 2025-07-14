@@ -22,6 +22,7 @@ import {
   loadNcrs,
   loadNotices,
   loadPayLessNotices,
+  haulPlan,
   lookaheadFrom,
   outputFor,
   loadRecords,
@@ -41,6 +42,7 @@ import {
   defectsReportDto,
   delayReportDto,
   importReportDto,
+  haulPlanDto,
   lookaheadDto,
   moneyDto,
   outputReportDto,
@@ -146,6 +148,7 @@ export function buildServer(service: Service): FastifyInstance {
         paymentApplications: job.paymentApplications.count(),
         resourceReturns: job.resourceReturns.count(),
         indices: job.indices.count(),
+        haulSites: job.haulSites.count(),
       },
       blockers: jobBlockers(job),
     };
@@ -286,6 +289,8 @@ export function buildServer(service: Service): FastifyInstance {
       }),
     );
   });
+
+  app.get('/haul', () => haulPlanDto(haulPlan(service)));
 
   app.get('/cash', (request) => {
     const query = request.query as Record<string, unknown>;

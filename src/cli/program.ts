@@ -25,6 +25,7 @@ import {
   loadNcrs,
   loadNotices,
   loadPayLessNotices,
+  haulPlan,
   lookaheadFrom,
   outputFor,
   loadRecords,
@@ -53,6 +54,7 @@ import {
 import { renderDefectsReport } from '../reporting/defectsReport.js';
 import { renderDelayReport } from '../reporting/delayReport.js';
 import { renderSubcontractReport } from '../reporting/subcontractReport.js';
+import { muckAwaySchedule, renderHaulPlan } from '../reporting/haulReport.js';
 import { chaseInspections, renderLookahead } from '../reporting/lookaheadReport.js';
 import { renderOutputReport } from '../reporting/outputReport.js';
 import { renderStrip } from '../reporting/stripMap.js';
@@ -340,6 +342,22 @@ export function buildProgram(deps: CliDeps): Command {
         emit(deps, globals(), renderLookahead(plan), plan.steps.length);
       },
     );
+
+  program
+    .command('haul')
+    .description('where the material has to go and what moving it costs')
+    .option('--muck-away', 'print only what has to leave each source')
+    .action(async (options: { muckAway?: boolean }) => {
+      const service = await serviceFor(deps, globals());
+      const plan = haulPlan(service);
+      const sites = service.job.haulSites.all();
+      if (options.muckAway === true) {
+        const schedule = muckAwaySchedule(plan, sites);
+        emit(deps, globals(), schedule.join('\n'), schedule);
+        return;
+      }
+      emit(deps, globals(), renderHaulPlan(plan, sites), plan.movements.length);
+    });
 
   program
     .command('cash')

@@ -4,6 +4,8 @@ import type { BillItem } from '../domain/bill/billItem.js';
 import { firstRevision } from '../domain/bill/revision.js';
 import type { Ncr } from '../domain/itp/ncr.js';
 import type { Standdown } from '../domain/time/calendar.js';
+import type { Allocation } from '../domain/earthworks/allocation.js';
+import { allocateHaul } from '../domain/earthworks/allocation.js';
 import type { IndexSeries } from '../domain/fluctuation/index.js';
 import type { ResourceReturn } from '../domain/resource/return.js';
 import type { SignOff } from '../domain/itp/signOff.js';
@@ -230,6 +232,25 @@ export function outputFor(service: Service, number: number): OutputReport {
     job.settings.outputAllowances,
     periodOf(service, number).cutOff,
   );
+}
+
+/**
+ * The haul plan for the job as it stands.
+ *
+ * Sources and destinations are split by kind here rather than in the store,
+ * because that split is a reading of the register rather than a fact about it.
+ * A stockpile is a destination this month and a source the next, and forcing
+ * the register to choose would mean rewriting it every time the job turns
+ * round.
+ */
+export function haulPlan(service: Service): Allocation {
+  const sites = service.job.haulSites.all();
+  return allocateHaul({
+    sources: sites.filter((site) => site.kind === 'cut' || site.kind === 'borrow'),
+    destinations: sites.filter((site) => site.kind === 'fill' || site.kind === 'tip'),
+    links: service.job.settings.haulLinks,
+    haulRate: service.job.settings.haulRate,
+  });
 }
 
 export interface LookaheadOptions {

@@ -40,6 +40,12 @@ import {
 } from './delay.js';
 import { defectFromJson, defectToJson } from './defects.js';
 import {
+  haulLinkFromJson,
+  haulLinkToJson,
+  haulSiteFromJson,
+  haulSiteToJson,
+} from './earthworks.js';
+import {
   adjustmentTermsFromJson,
   adjustmentTermsToJson,
   indexSeriesFromJson,
@@ -119,6 +125,7 @@ export interface JobDocument {
   readonly resourceReturns: readonly Record<string, unknown>[];
   readonly indices: readonly Record<string, unknown>[];
   readonly contraCharges: readonly Record<string, unknown>[];
+  readonly haulSites: readonly Record<string, unknown>[];
   readonly holidays: readonly string[];
   readonly standdowns: readonly Record<string, unknown>[];
 }
@@ -191,6 +198,8 @@ function settingsToJson(settings: JobSettings): Record<string, unknown> {
     adjustment:
       settings.adjustment === null ? null : adjustmentTermsToJson(settings.adjustment),
     contraNotifyDays: settings.contraNotifyDays,
+    haulRate: moneyToJson(settings.haulRate),
+    haulLinks: settings.haulLinks.map(haulLinkToJson),
     tolerances: settings.tolerances.rules.map((rule) => ({
       workClass: rule.workClass,
       allowance: percentToJson(rule.allowance),
@@ -604,6 +613,7 @@ export function jobToJson(job: Job): JobDocument {
     resourceReturns: job.resourceReturns.all().map(resourceReturnToJson),
     indices: job.indices.all().map(indexSeriesToJson),
     contraCharges: job.contraCharges.all().map(contraChargeToJson),
+    haulSites: job.haulSites.all().map(haulSiteToJson),
     holidays: job.holidays.map(dateToJson),
     standdowns: job.standdowns.map(standdownToJson),
   };
@@ -643,6 +653,11 @@ export function jobFromJson(value: unknown): Job {
     ).map(allowanceFromJson),
     adjustment: adjustmentTermsFromJson(settings['adjustment']),
     contraNotifyDays: Number(settings['contraNotifyDays'] ?? 14),
+    haulRate:
+      settings['haulRate'] === undefined || settings['haulRate'] === null
+        ? { minor: 0, currency: currencyFromJson(settings['currency']) }
+        : moneyFromJson(settings['haulRate']),
+    haulLinks: arrayFromJson(settings['haulLinks'] ?? [], 'haul links').map(haulLinkFromJson),
     tolerances: {
       rules: arrayFromJson(settings['tolerances'], 'tolerance rules').map((entry) => {
         const rule = objectFromJson(entry, 'tolerance rule');
@@ -727,6 +742,10 @@ export function jobFromJson(value: unknown): Job {
   putAll(
     job.contraCharges,
     arrayFromJson(doc['contraCharges'] ?? [], 'contra charges').map(contraChargeFromJson),
+  );
+  putAll(
+    job.haulSites,
+    arrayFromJson(doc['haulSites'] ?? [], 'haul sites').map(haulSiteFromJson),
   );
   job.holidays = arrayFromJson(doc['holidays'], 'holidays').map(dateFromJson);
   job.standdowns = arrayFromJson(doc['standdowns'], 'standdowns').map(standdownFromJson);

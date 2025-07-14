@@ -9,6 +9,7 @@ import { buildPaymentTerms } from '../../src/domain/subcontract/payment.js';
 import { buildAdjustmentTerms } from '../../src/domain/fluctuation/adjustment.js';
 import { buildIndexSeries } from '../../src/domain/fluctuation/index.js';
 import { buildResourceReturn } from '../../src/domain/resource/return.js';
+import { quantity } from '../../src/domain/quantity/quantity.js';
 import { buildContraCharge } from '../../src/domain/subcontract/contraCharge.js';
 import { buildSubcontract } from '../../src/domain/subcontract/subcontract.js';
 import { buildAllowances } from '../../src/progress/productivity.js';
@@ -333,5 +334,56 @@ export function fluctuatingJob(): Job {
       ],
     }),
   };
+  return job;
+}
+
+/**
+ * The commercial job with the earthworks haul set up as well.
+ *
+ * Kept apart again, because a haul plan needs sites and distances that most
+ * of the engine has no opinion about, and loading them into every fixture
+ * would make every unrelated snapshot longer without making it truer.
+ */
+export function haulingJob(): Job {
+  const job = commercialJob();
+
+  job.settings = {
+    ...job.settings,
+    haulRate: gbp(1),
+    haulLinks: [
+      { fromId: 'CUT-A', toId: 'EMB-B', km: 3 },
+      { fromId: 'CUT-A', toId: 'TIP-1', km: 1 },
+      { fromId: 'BOR-1', toId: 'EMB-B', km: 2 },
+    ],
+  };
+
+  job.haulSites.add({
+    id: 'CUT-A',
+    name: 'cutting at 12+400',
+    kind: 'cut',
+    volume: quantity(6000, 'm3'),
+    unitCost: gbp(0),
+  });
+  job.haulSites.add({
+    id: 'BOR-1',
+    name: 'borrow pit off the haul road',
+    kind: 'borrow',
+    volume: quantity(4000, 'm3'),
+    unitCost: gbp(3),
+  });
+  job.haulSites.add({
+    id: 'EMB-B',
+    name: 'embankment at 13+200',
+    kind: 'fill',
+    volume: quantity(7000, 'm3'),
+    unitCost: gbp(0),
+  });
+  job.haulSites.add({
+    id: 'TIP-1',
+    name: 'licensed tip',
+    kind: 'tip',
+    volume: quantity(5000, 'm3'),
+    unitCost: gbp(9),
+  });
   return job;
 }

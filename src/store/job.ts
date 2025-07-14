@@ -21,6 +21,7 @@ import type {
   PaymentApplication,
   PaymentNotice,
 } from '../domain/subcontract/payment.js';
+import type { HaulLink, HaulSite } from '../domain/earthworks/allocation.js';
 import type { ContraCharge } from '../domain/subcontract/contraCharge.js';
 import type { Subcontract } from '../domain/subcontract/subcontract.js';
 import { DEFAULT_CONTRA_NOTIFY_DAYS } from '../domain/subcontract/subcontract.js';
@@ -66,6 +67,10 @@ export interface JobSettings {
   readonly adjustment: AdjustmentTerms | null;
   /** Days to notify a subcontractor of a charge the order does not cover. */
   readonly contraNotifyDays: number;
+  /** What it costs to move a cubic metre one kilometre. */
+  readonly haulRate: Money;
+  /** The haul distances between the sites on the job. */
+  readonly haulLinks: readonly HaulLink[];
   readonly tolerances: ToleranceSet;
   readonly workingDays: readonly number[];
   readonly cutOffDay: number;
@@ -88,6 +93,8 @@ export interface JobSettingsInput {
   readonly outputAllowances?: readonly OutputAllowance[];
   readonly adjustment?: AdjustmentTerms | null;
   readonly contraNotifyDays?: number;
+  readonly haulRate?: Money;
+  readonly haulLinks?: readonly HaulLink[];
   readonly tolerances?: ToleranceSet;
   readonly workingDays?: readonly number[];
   readonly cutOffDay?: number;
@@ -127,6 +134,7 @@ export interface Job {
   readonly resourceReturns: Repository<ResourceReturn>;
   readonly indices: Repository<IndexSeries>;
   readonly contraCharges: Repository<ContraCharge>;
+  readonly haulSites: Repository<HaulSite>;
   holidays: readonly SiteDate[];
   standdowns: readonly Standdown[];
 }
@@ -159,6 +167,8 @@ export function jobSettings(input: JobSettingsInput): JobSettings {
     outputAllowances: buildAllowances(input.outputAllowances ?? []),
     adjustment: input.adjustment ?? null,
     contraNotifyDays: input.contraNotifyDays ?? DEFAULT_CONTRA_NOTIFY_DAYS,
+    haulRate: input.haulRate ?? { minor: 0, currency },
+    haulLinks: [...(input.haulLinks ?? [])],
     tolerances: input.tolerances ?? DEFAULT_TOLERANCES,
     workingDays: input.workingDays ?? DEFAULT_WORKING_DAYS,
     cutOffDay,
@@ -202,6 +212,7 @@ export function createJob(input: JobSettingsInput): Job {
     resourceReturns: inMemoryRepository<ResourceReturn>('resource return', (r) => r.id),
     indices: inMemoryRepository<IndexSeries>('index series', (i) => i.id),
     contraCharges: inMemoryRepository<ContraCharge>('contra charge', (c) => c.id),
+    haulSites: inMemoryRepository<HaulSite>('haul site', (h) => h.id),
     holidays: [],
     standdowns: [],
   };

@@ -10,6 +10,8 @@ import { formatSiteDate } from '../domain/time/siteDate.js';
 import type { ImportIssue, ImportReport } from '../ingest/report.js';
 import type { DefectsReport } from '../reporting/defectsReport.js';
 import type { DelayReport } from '../reporting/delayReport.js';
+import type { Allocation } from '../domain/earthworks/allocation.js';
+import { haulMoment, isBalanced } from '../domain/earthworks/allocation.js';
 import type { Lookahead } from '../progress/lookahead.js';
 import { fitsInWindow, readyNow, waitingOnInspection } from '../progress/lookahead.js';
 import type { OutputReport } from '../reporting/outputReport.js';
@@ -406,6 +408,26 @@ export function lookaheadDto(lookahead: Lookahead): Record<string, unknown> {
       days: step.days,
       waitingOn: [...step.waitingOn],
       heldPoints: [...step.heldPoints],
+    })),
+  };
+}
+
+export function haulPlanDto(allocation: Allocation): Record<string, unknown> {
+  return {
+    cost: moneyDto(allocation.cost),
+    haulMoment: Number(haulMoment(allocation).toFixed(3)),
+    balanced: isBalanced(allocation),
+    unplaced: quantityDto(allocation.unplaced),
+    unfilled: quantityDto(allocation.unfilled),
+    spareTipCapacity: quantityDto(allocation.spareTipCapacity),
+    movements: allocation.movements.map((movement) => ({
+      fromId: movement.fromId,
+      toId: movement.toId,
+      volume: quantityDto(movement.volume),
+      km: movement.km,
+      haulCost: moneyDto(movement.haulCost),
+      siteCost: moneyDto(movement.siteCost),
+      cost: moneyDto(movement.cost),
     })),
   };
 }
