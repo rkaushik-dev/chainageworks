@@ -71,6 +71,7 @@ import {
 } from './subcontract.js';
 import type { Job, JobSettings } from '../job.js';
 import { createJob } from '../job.js';
+import type { Repository } from '../repository.js';
 import { putAll } from '../repository.js';
 import {
   arrayFromJson,
@@ -589,31 +590,162 @@ function standdownFromJson(value: unknown): Standdown {
   };
 }
 
+/**
+ * One register, and how it goes to and from the file.
+ *
+ * The type is erased on the way into the table on purpose. Every entry has a
+ * different record type and none of the loop's work depends on which, so
+ * carrying the type through the table would buy nothing and cost a generic
+ * parameter on every line of it.
+ */
+interface RegisterCodec {
+  readonly key: string;
+  readonly label: string;
+  readonly write: (job: Job) => Record<string, unknown>[];
+  readonly read: (job: Job, entries: readonly unknown[]) => void;
+}
+
+function register<T>(
+  key: string,
+  label: string,
+  of: (job: Job) => Repository<T>,
+  toJson: (item: T) => Record<string, unknown>,
+  fromJson: (value: unknown) => T,
+): RegisterCodec {
+  return {
+    key,
+    label,
+    write: (job) => of(job).all().map(toJson),
+    read: (job, entries) => {
+      putAll(of(job), entries.map(fromJson));
+    },
+  };
+}
+
+/**
+ * Every register that goes to the file the same way.
+ *
+ * Rules of credit and inspection plans are deliberately not here. The profiles
+ * have to be cleared before they are read, because a job file carries its own
+ * and the standard ones are seeded into a new job, and the plans have to be
+ * read against the profiles that were just loaded. Both are one off and both
+ * would have to be special cased inside the loop, which is exactly the shape
+ * this table exists to avoid.
+ */
+const REGISTERS: readonly RegisterCodec[] = [
+  register('alignments', 'alignments', (j) => j.alignments, alignmentToJson, alignmentFromJson),
+  register(
+    'billRevisions',
+    'bill revisions',
+    (j) => j.billRevisions,
+    revisionToJson,
+    revisionFromJson,
+  ),
+  register('packages', 'work packages', (j) => j.packages, packageToJson, packageFromJson),
+  register('signOffs', 'sign offs', (j) => j.signOffs, signOffToJson, signOffFromJson),
+  register('ncrs', 'non conformances', (j) => j.ncrs, ncrToJson, ncrFromJson),
+  register('records', 'survey records', (j) => j.records, recordToJson, recordFromJson),
+  register(
+    'materials',
+    'materials on site',
+    (j) => j.materials,
+    materialsToJson,
+    materialsFromJson,
+  ),
+  register('variations', 'variations', (j) => j.variations, variationToJson, variationFromJson),
+  register(
+    'dayworkSheets',
+    'daywork sheets',
+    (j) => j.dayworkSheets,
+    dayworkSheetToJson,
+    dayworkSheetFromJson,
+  ),
+  register(
+    'delayEvents',
+    'delay events',
+    (j) => j.delayEvents,
+    delayEventToJson,
+    delayEventFromJson,
+  ),
+  register('defects', 'defects', (j) => j.defects, defectToJson, defectFromJson),
+  register(
+    'subcontracts',
+    'subcontracts',
+    (j) => j.subcontracts,
+    subcontractToJson,
+    subcontractFromJson,
+  ),
+  register(
+    'paymentApplications',
+    'payment applications',
+    (j) => j.paymentApplications,
+    applicationToJson,
+    applicationFromJson,
+  ),
+  register(
+    'paymentNotices',
+    'payment notices',
+    (j) => j.paymentNotices,
+    noticeToJson,
+    noticeFromJson,
+  ),
+  register(
+    'payLessNotices',
+    'pay less notices',
+    (j) => j.payLessNotices,
+    payLessToJson,
+    payLessFromJson,
+  ),
+  register(
+    'resourceReturns',
+    'resource returns',
+    (j) => j.resourceReturns,
+    resourceReturnToJson,
+    resourceReturnFromJson,
+  ),
+  register('indices', 'index series', (j) => j.indices, indexSeriesToJson, indexSeriesFromJson),
+  register(
+    'contraCharges',
+    'contra charges',
+    (j) => j.contraCharges,
+    contraChargeToJson,
+    contraChargeFromJson,
+  ),
+  register('haulSites', 'haul sites', (j) => j.haulSites, haulSiteToJson, haulSiteFromJson),
+];
+
 export function jobToJson(job: Job): JobDocument {
+  const written: Record<string, Record<string, unknown>[]> = {};
+  for (const entry of REGISTERS) written[entry.key] = entry.write(job);
+  // Named out one at a time rather than spread, so the document type still
+  // says what a job file holds and a register added to the table without a
+  // field here fails to compile rather than going missing at run time.
+  const at = (key: string): Record<string, unknown>[] => written[key] ?? [];
+
   return {
     version: DOCUMENT_VERSION,
     settings: settingsToJson(job.settings),
-    alignments: job.alignments.all().map(alignmentToJson),
-    billRevisions: job.billRevisions.all().map(revisionToJson),
-    packages: job.packages.all().map(packageToJson),
+    alignments: at('alignments'),
+    billRevisions: at('billRevisions'),
+    packages: at('packages'),
     profiles: job.profiles.all().map(profileToJson),
     plans: job.plans.all().map(planToJson),
-    signOffs: job.signOffs.all().map(signOffToJson),
-    ncrs: job.ncrs.all().map(ncrToJson),
-    records: job.records.all().map(recordToJson),
-    materials: job.materials.all().map(materialsToJson),
-    variations: job.variations.all().map(variationToJson),
-    dayworkSheets: job.dayworkSheets.all().map(dayworkSheetToJson),
-    delayEvents: job.delayEvents.all().map(delayEventToJson),
-    defects: job.defects.all().map(defectToJson),
-    subcontracts: job.subcontracts.all().map(subcontractToJson),
-    paymentApplications: job.paymentApplications.all().map(applicationToJson),
-    paymentNotices: job.paymentNotices.all().map(noticeToJson),
-    payLessNotices: job.payLessNotices.all().map(payLessToJson),
-    resourceReturns: job.resourceReturns.all().map(resourceReturnToJson),
-    indices: job.indices.all().map(indexSeriesToJson),
-    contraCharges: job.contraCharges.all().map(contraChargeToJson),
-    haulSites: job.haulSites.all().map(haulSiteToJson),
+    signOffs: at('signOffs'),
+    ncrs: at('ncrs'),
+    records: at('records'),
+    materials: at('materials'),
+    variations: at('variations'),
+    dayworkSheets: at('dayworkSheets'),
+    delayEvents: at('delayEvents'),
+    defects: at('defects'),
+    subcontracts: at('subcontracts'),
+    paymentApplications: at('paymentApplications'),
+    paymentNotices: at('paymentNotices'),
+    payLessNotices: at('payLessNotices'),
+    resourceReturns: at('resourceReturns'),
+    indices: at('indices'),
+    contraCharges: at('contraCharges'),
+    haulSites: at('haulSites'),
     holidays: job.holidays.map(dateToJson),
     standdowns: job.standdowns.map(standdownToJson),
   };
@@ -684,69 +816,15 @@ export function jobFromJson(value: unknown): Job {
   job.profiles.clear();
   const profiles = arrayFromJson(doc['profiles'], 'rules of credit').map(profileFromJson);
   putAll(job.profiles, profiles);
-  putAll(job.alignments, arrayFromJson(doc['alignments'], 'alignments').map(alignmentFromJson));
-  putAll(
-    job.billRevisions,
-    arrayFromJson(doc['billRevisions'], 'bill revisions').map(revisionFromJson),
-  );
-  putAll(job.packages, arrayFromJson(doc['packages'], 'work packages').map(packageFromJson));
   putAll(
     job.plans,
     arrayFromJson(doc['plans'], 'inspection plans').map((entry) =>
       planFromJson(entry, profiles),
     ),
   );
-  putAll(job.signOffs, arrayFromJson(doc['signOffs'], 'sign offs').map(signOffFromJson));
-  putAll(job.ncrs, arrayFromJson(doc['ncrs'], 'non conformances').map(ncrFromJson));
-  putAll(job.records, arrayFromJson(doc['records'], 'survey records').map(recordFromJson));
-  putAll(
-    job.materials,
-    arrayFromJson(doc['materials'], 'materials on site').map(materialsFromJson),
-  );
-  putAll(job.variations, arrayFromJson(doc['variations'], 'variations').map(variationFromJson));
-  putAll(
-    job.dayworkSheets,
-    arrayFromJson(doc['dayworkSheets'] ?? [], 'daywork sheets').map(dayworkSheetFromJson),
-  );
-  putAll(
-    job.delayEvents,
-    arrayFromJson(doc['delayEvents'] ?? [], 'delay events').map(delayEventFromJson),
-  );
-  putAll(job.defects, arrayFromJson(doc['defects'] ?? [], 'defects').map(defectFromJson));
-  putAll(
-    job.subcontracts,
-    arrayFromJson(doc['subcontracts'] ?? [], 'subcontracts').map(subcontractFromJson),
-  );
-  putAll(
-    job.paymentApplications,
-    arrayFromJson(doc['paymentApplications'] ?? [], 'payment applications').map(
-      applicationFromJson,
-    ),
-  );
-  putAll(
-    job.paymentNotices,
-    arrayFromJson(doc['paymentNotices'] ?? [], 'payment notices').map(noticeFromJson),
-  );
-  putAll(
-    job.payLessNotices,
-    arrayFromJson(doc['payLessNotices'] ?? [], 'pay less notices').map(payLessFromJson),
-  );
-  putAll(
-    job.resourceReturns,
-    arrayFromJson(doc['resourceReturns'] ?? [], 'resource returns').map(resourceReturnFromJson),
-  );
-  putAll(
-    job.indices,
-    arrayFromJson(doc['indices'] ?? [], 'index series').map(indexSeriesFromJson),
-  );
-  putAll(
-    job.contraCharges,
-    arrayFromJson(doc['contraCharges'] ?? [], 'contra charges').map(contraChargeFromJson),
-  );
-  putAll(
-    job.haulSites,
-    arrayFromJson(doc['haulSites'] ?? [], 'haul sites').map(haulSiteFromJson),
-  );
+  for (const entry of REGISTERS) {
+    entry.read(job, arrayFromJson(doc[entry.key] ?? [], entry.label));
+  }
   job.holidays = arrayFromJson(doc['holidays'], 'holidays').map(dateFromJson);
   job.standdowns = arrayFromJson(doc['standdowns'], 'standdowns').map(standdownFromJson);
   return job;
