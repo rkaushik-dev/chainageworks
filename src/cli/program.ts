@@ -28,6 +28,7 @@ import {
   haulPlan,
   lookaheadFrom,
   outputFor,
+  outturnFor,
   loadRecords,
   loadResourceReturns,
   loadSignOffs,
@@ -57,6 +58,7 @@ import { renderSubcontractReport } from '../reporting/subcontractReport.js';
 import { muckAwaySchedule, renderHaulPlan } from '../reporting/haulReport.js';
 import { chaseInspections, renderLookahead } from '../reporting/lookaheadReport.js';
 import { renderOutputReport } from '../reporting/outputReport.js';
+import { renderOutturn } from '../reporting/outturnReport.js';
 import { renderStrip } from '../reporting/stripMap.js';
 import { renderPairs, renderTable } from '../reporting/format/table.js';
 import type { Job } from '../store/job.js';
@@ -309,6 +311,15 @@ export function buildProgram(deps: CliDeps): Command {
     renderOutputReport,
     (report) => report.totals.labourHours,
     'no returns have been made',
+  );
+
+  valuationCommand(
+    'outturn',
+    'the anticipated final account at a valuation',
+    outturnFor,
+    renderOutturn,
+    (outturn) => outturn.total.minor,
+    'no such valuation',
   );
 
   valuationCommand(

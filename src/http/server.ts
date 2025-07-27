@@ -25,6 +25,7 @@ import {
   haulPlan,
   lookaheadFrom,
   outputFor,
+  outturnFor,
   loadRecords,
   loadResourceReturns,
   loadSignOffs,
@@ -46,6 +47,7 @@ import {
   lookaheadDto,
   moneyDto,
   outputReportDto,
+  outturnDto,
   periodDto,
   progressReportDto,
   stripDto,
@@ -260,6 +262,7 @@ export function buildServer(service: Service): FastifyInstance {
   valuationRoute('defects', defectsFor, defectsReportDto);
   valuationRoute('payments', paymentsFor, subcontractReportDto);
   valuationRoute('output', outputFor, outputReportDto);
+  valuationRoute('outturn', outturnFor, outturnDto);
 
   app.get('/valuations/:number/strip/:packageId', (request) => {
     const params = request.params as { number: string; packageId: string };

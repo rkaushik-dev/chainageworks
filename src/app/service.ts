@@ -50,6 +50,8 @@ import { putAll } from '../store/repository.js';
 import type { CashPoint } from '../valuation/cashFlow.js';
 import { buildCashFlow } from '../valuation/cashFlow.js';
 import type { Certificate } from '../valuation/certificate.js';
+import type { Outturn } from '../valuation/outturn.js';
+import { buildOutturn } from '../valuation/outturn.js';
 import { certifySeries } from '../valuation/certificate.js';
 import type { PeriodSchedule, ValuationPeriod } from '../valuation/period.js';
 import { periodByNumber } from '../valuation/period.js';
@@ -250,6 +252,32 @@ export function haulPlan(service: Service): Allocation {
     destinations: sites.filter((site) => site.kind === 'fill' || site.kind === 'tip'),
     links: service.job.settings.haulLinks,
     haulRate: service.job.settings.haulRate,
+  });
+}
+
+/**
+ * The anticipated final account at a valuation cut-off.
+ *
+ * Every term the contract carries is handed over, not just the ones the job
+ * happens to be using. A clause that is null stays null all the way through,
+ * so a fixed price job and a job whose indices have not moved yet produce
+ * visibly different reports rather than the same zero.
+ */
+export function outturnFor(service: Service, number: number): Outturn {
+  const job = service.job;
+  const settings = job.settings;
+  return buildOutturn({
+    context: contextOf(service),
+    asAt: periodOf(service, number).cutOff,
+    contractSum: settings.contractSum,
+    variations: job.variations.all(),
+    dayworkSchedule: settings.daywork,
+    dayworkSheets: job.dayworkSheets.all(),
+    adjustment: settings.adjustment,
+    indices: job.indices.all(),
+    completion: settings.completion,
+    delayEvents: job.delayEvents.all(),
+    calendar: jobCalendar(job),
   });
 }
 

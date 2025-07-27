@@ -26,6 +26,8 @@ import { cellGlyph } from '../reporting/stripMap.js';
 import type { CashPoint } from '../valuation/cashFlow.js';
 import { peakExposure } from '../valuation/cashFlow.js';
 import type { Certificate } from '../valuation/certificate.js';
+import type { Outturn } from '../valuation/outturn.js';
+import { isOverContractSum, outturnParts } from '../valuation/outturn.js';
 import type { ValuationPeriod } from '../valuation/period.js';
 
 /**
@@ -428,6 +430,32 @@ export function haulPlanDto(allocation: Allocation): Record<string, unknown> {
       haulCost: moneyDto(movement.haulCost),
       siteCost: moneyDto(movement.siteCost),
       cost: moneyDto(movement.cost),
+    })),
+  };
+}
+
+export function outturnDto(outturn: Outturn): Record<string, unknown> {
+  return {
+    asAt: formatSiteDate(outturn.asAt),
+    contractSum: moneyDto(outturn.contractSum),
+    parts: outturnParts(outturn).map((part) => ({
+      name: part.name,
+      amount: moneyDto(part.amount),
+    })),
+    total: moneyDto(outturn.total),
+    movement: moneyDto(outturn.movement),
+    movementPercent: percentDto(outturn.movementPercent),
+    overContractSum: isOverContractSum(outturn),
+    provisionalAdjustment: outturn.priceAdjustment.provisional,
+    lines: outturn.account.lines.map((line) => ({
+      code: formatItemCode(line.code),
+      description: line.description,
+      billed: moneyDto(line.billed),
+      measured: moneyDto(line.measured),
+      forecast: moneyDto(line.forecast),
+      movement: moneyDto(line.movement),
+      percentComplete: line.percentComplete,
+      extrapolated: line.extrapolated,
     })),
   };
 }
