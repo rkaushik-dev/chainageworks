@@ -42,6 +42,7 @@ import { buildProgressContext } from '../progress/context.js';
 import type { MaterialsOnSite } from '../valuation/materials.js';
 import type { PeriodSchedule } from '../valuation/period.js';
 import { buildSchedule } from '../valuation/period.js';
+import type { RetentionBond } from '../valuation/bond.js';
 import type { RetentionTerms } from '../valuation/retention.js';
 import { DEFAULT_RETENTION } from '../valuation/retention.js';
 import type { Repository } from './repository.js';
@@ -54,6 +55,8 @@ export interface JobSettings {
   readonly currency: CurrencyCode;
   readonly contractSum: Money;
   readonly retention: RetentionTerms;
+  /** A bond standing in place of the cash retention, when the contract has one. */
+  readonly retentionBond: RetentionBond | null;
   readonly materialsAllowance: Percent | null;
   /** The daywork schedule, when the contract has one. */
   readonly daywork: DayworkSchedule | null;
@@ -86,6 +89,7 @@ export interface JobSettingsInput {
   readonly currency?: CurrencyCode;
   readonly contractSum: Money;
   readonly retention?: RetentionTerms;
+  readonly retentionBond?: RetentionBond | null;
   readonly materialsAllowance?: Percent | null;
   readonly daywork?: DayworkSchedule | null;
   readonly completion?: CompletionTerms | null;
@@ -160,6 +164,7 @@ export function jobSettings(input: JobSettingsInput): JobSettings {
     currency,
     contractSum: input.contractSum,
     retention: input.retention ?? DEFAULT_RETENTION,
+    retentionBond: input.retentionBond ?? null,
     materialsAllowance: input.materialsAllowance ?? null,
     daywork: input.daywork ?? null,
     completion: input.completion ?? null,

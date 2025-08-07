@@ -135,7 +135,8 @@ export function renderCertificate(certificate: Certificate): string {
         ['daywork', formatMoney(certificate.daywork)],
         ...adjustmentRows(certificate),
         ['gross valuation', formatMoney(certificate.gross)],
-        ['less retention', formatMoney(retention.held)],
+        ...bondRows(certificate),
+        ['less retention', formatMoney(certificate.retentionHeld)],
         ['net valuation', formatMoney(certificate.netValuation)],
         ['less previously certified', formatMoney(certificate.previouslyCertified)],
         ['amount due this certificate', formatMoney(certificate.amountDue)],
@@ -154,6 +155,21 @@ export function renderCertificate(certificate: Certificate): string {
  * invites the reader to ask which index produced it, and on a fixed price
  * contract the answer is that there is no clause at all.
  */
+/**
+ * The bond rows are left off a job with no bond, and the retention line reads
+ * the same as it always did. On a job with one, both figures are printed: what
+ * the retention account holds and what is actually kept in cash, because the
+ * two diverge from the first certificate and everyone asks about it once.
+ */
+function bondRows(certificate: Certificate): string[][] {
+  const bond = certificate.bond;
+  if (bond === null) return [];
+  return [
+    ['retention due', formatMoney(certificate.retention.held)],
+    [`covered by bond ${bond.bond.id}`, formatMoney(bond.released)],
+  ];
+}
+
 function adjustmentRows(certificate: Certificate): string[][] {
   const adjustment = certificate.priceAdjustment;
   if (adjustment.factor.lines.length === 0) return [];

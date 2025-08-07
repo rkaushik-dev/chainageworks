@@ -160,6 +160,19 @@ export function certificateDto(certificate: Certificate): Record<string, unknown
       releasedOnDefects: moneyDto(certificate.retention.releasedOnDefects),
       capReached: certificate.retention.capReached,
     },
+    bond:
+      certificate.bond === null
+        ? null
+        : {
+            id: certificate.bond.bond.id,
+            surety: certificate.bond.bond.surety,
+            cover: moneyDto(certificate.bond.cover),
+            released: moneyDto(certificate.bond.released),
+            shortfall: moneyDto(certificate.bond.shortfall),
+            expired: certificate.bond.expired,
+            daysToExpiry: certificate.bond.daysToExpiry,
+          },
+    retentionHeld: moneyDto(certificate.retentionHeld),
     netValuation: moneyDto(certificate.netValuation),
     previouslyCertified: moneyDto(certificate.previouslyCertified),
     amountDue: moneyDto(certificate.amountDue),

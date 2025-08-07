@@ -15,6 +15,8 @@ import { dayworkValue } from '../domain/daywork/sheet.js';
 import type { MaterialsOnSite } from './materials.js';
 import { claimableMaterials, materialsValue } from './materials.js';
 import type { ValuationPeriod } from './period.js';
+import type { BondPosition, RetentionBond } from './bond.js';
+import { bondPosition } from './bond.js';
 import type { RetentionState, RetentionTerms } from './retention.js';
 import { computeRetention } from './retention.js';
 import type { SiteDate } from '../domain/time/siteDate.js';
@@ -31,6 +33,8 @@ export interface CertificateInput {
   /** The fluctuation clause, when the contract carries one. */
   readonly adjustment?: AdjustmentTerms | null;
   readonly indices?: readonly IndexSeries[];
+  /** A retention bond standing in place of the cash, when there is one. */
+  readonly bond?: RetentionBond | null;
   /** The cumulative gross certified by the previous certificate. */
   readonly previouslyCertified: Money;
   readonly substantialCompletionOn?: SiteDate | null;
@@ -58,6 +62,10 @@ export interface Certificate {
   readonly priceAdjustment: PriceAdjustment;
   readonly gross: Money;
   readonly retention: RetentionState;
+  /** Where the bond stands against the cash, null when there is no bond. */
+  readonly bond: BondPosition | null;
+  /** Cash the bond has released, which is retention not held this month. */
+  readonly retentionHeld: Money;
   readonly netValuation: Money;
   readonly previouslyCertified: Money;
   readonly amountDue: Money;
@@ -118,7 +126,20 @@ export function buildCertificate(input: CertificateInput): Certificate {
     asAt,
   });
 
-  const netValuation = subtractMoney(gross, retention.held);
+  /**
+   * A bond does not change what the retention is, only whether it is held in
+   * cash. Working it out this way round matters at the end of the job: the
+   * retention account still has to release the same money on the same dates,
+   * and a bond that expires early puts the cash back in the employer's hands
+   * without anything else on the certificate moving.
+   */
+  const bondTerms = input.bond ?? null;
+  const position =
+    bondTerms === null
+      ? null
+      : bondPosition(bondTerms, retention.held, asAt, input.substantialCompletionOn ?? null);
+  const retentionHeld = position === null ? retention.held : position.shortfall;
+  const netValuation = subtractMoney(gross, retentionHeld);
   return {
     period: input.period,
     billRevision: revisionAsAt(input.context.billHistory, asAt).reference,
@@ -130,6 +151,8 @@ export function buildCertificate(input: CertificateInput): Certificate {
     priceAdjustment: adjustment,
     gross,
     retention,
+    bond: position,
+    retentionHeld,
     netValuation,
     previouslyCertified: input.previouslyCertified,
     amountDue: subtractMoney(netValuation, input.previouslyCertified),
@@ -172,4 +195,14 @@ export function restsOnProvisionalIndex(certificate: Certificate): boolean {
 /** Certificates in a series that will have to be reworked when indices firm up. */
 export function provisionalCertificates(series: readonly Certificate[]): Certificate[] {
   return series.filter(restsOnProvisionalIndex);
+}
+
+/** Cash the bond is keeping out of the employer's hands this month. */
+export function bondReleased(certificate: Certificate): Money {
+  return certificate.bond?.released ?? zeroMoney(certificate.gross.currency);
+}
+
+/** True when the bond has lapsed and the cash retention has come back. */
+export function bondHasLapsed(certificate: Certificate): boolean {
+  return certificate.bond?.expired ?? false;
 }

@@ -39,6 +39,7 @@ import {
   delayEventToJson,
 } from './delay.js';
 import { defectFromJson, defectToJson } from './defects.js';
+import { retentionBondFromJson, retentionBondToJson } from './bond.js';
 import {
   haulLinkFromJson,
   haulLinkToJson,
@@ -190,6 +191,8 @@ function settingsToJson(settings: JobSettings): Record<string, unknown> {
       limit: percentToJson(settings.retention.limit),
       releaseOnCompletion: percentToJson(settings.retention.releaseOnCompletion),
     },
+    retentionBond:
+      settings.retentionBond === null ? null : retentionBondToJson(settings.retentionBond),
     materialsAllowance:
       settings.materialsAllowance === null ? null : percentToJson(settings.materialsAllowance),
     daywork: settings.daywork === null ? null : dayworkScheduleToJson(settings.daywork),
@@ -774,6 +777,7 @@ export function jobFromJson(value: unknown): Job {
       limit: percentFromJson(retention['limit']),
       releaseOnCompletion: percentFromJson(retention['releaseOnCompletion']),
     },
+    retentionBond: retentionBondFromJson(settings['retentionBond']),
     materialsAllowance:
       allowance === null || allowance === undefined ? null : percentFromJson(allowance),
     daywork: dayworkScheduleFromJson(settings['daywork']),

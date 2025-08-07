@@ -138,6 +138,7 @@ export function certificateSeries(service: Service, count: number): Certificate[
     dayworkSheets: service.job.dayworkSheets.all(),
     adjustment: settings.adjustment,
     indices: service.job.indices.all(),
+    bond: settings.retentionBond,
     substantialCompletionOn: settings.substantialCompletionOn,
     defectsCertificateOn: settings.defectsCertificateOn,
   });
