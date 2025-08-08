@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG } from '../../src/config/config.js';
-import { certificateFor, createService, progressFor } from '../../src/app/service.js';
+import {
+  certificateFor,
+  createService,
+  lookaheadFrom,
+  outputFor,
+  outturnFor,
+  paymentsFor,
+  progressFor,
+} from '../../src/app/service.js';
 import { earnAll } from '../../src/progress/earn.js';
 import { jobContext } from '../../src/store/job.js';
 import { jobFromJson, jobToJson } from '../../src/store/codec/job.js';
@@ -31,6 +39,13 @@ describe('the size of the fixture', () => {
     expect(job.packages.count()).toBe(200);
     expect(job.records.count()).toBe(8000);
     expect(job.signOffs.count()).toBe(200);
+  });
+
+  it('carries a commercial side to match', () => {
+    expect(job.subcontracts.count()).toBe(30);
+    expect(job.paymentApplications.count()).toBe(360);
+    expect(job.contraCharges.count()).toBe(90);
+    expect(job.resourceReturns.count()).toBe(2000);
   });
 });
 
@@ -95,5 +110,43 @@ describe('the importer', () => {
     });
     expect(read).toBe(5000);
     expect(elapsed).toBeLessThan(4000);
+  });
+});
+
+describe('the commercial reports', () => {
+  const service = createService(job, DEFAULT_CONFIG);
+
+  it('values thirty orders and their set off in under six seconds', () => {
+    let orders = 0;
+    const elapsed = timed(() => {
+      orders = paymentsFor(service, 6).positions.length;
+    });
+    expect(orders).toBe(30);
+    expect(elapsed).toBeLessThan(6000);
+  });
+
+  it('sets two thousand returns against the work in under fifteen seconds', () => {
+    let packages = 0;
+    const elapsed = timed(() => {
+      packages = outputFor(service, 6).packages.length;
+    });
+    expect(packages).toBe(200);
+    expect(elapsed).toBeLessThan(15_000);
+  });
+
+  it('rolls the whole account up in under twenty seconds', () => {
+    const elapsed = timed(() => {
+      outturnFor(service, 6);
+    });
+    expect(elapsed).toBeLessThan(20_000);
+  });
+
+  it('plans four weeks across two hundred packages in under ten seconds', () => {
+    let steps = 0;
+    const elapsed = timed(() => {
+      steps = lookaheadFrom(service, d('2025-06-25')).steps.length;
+    });
+    expect(steps).toBeGreaterThan(0);
+    expect(elapsed).toBeLessThan(10_000);
   });
 });

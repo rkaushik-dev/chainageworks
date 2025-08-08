@@ -13,12 +13,17 @@ import { moneyFromMajor } from '../../src/domain/money/money.js';
 import { rate } from '../../src/domain/money/rate.js';
 import { buildWorkPackage } from '../../src/domain/packages/workPackage.js';
 import { quantity } from '../../src/domain/quantity/quantity.js';
+import { buildResourceReturn } from '../../src/domain/resource/return.js';
+import { buildContraCharge } from '../../src/domain/subcontract/contraCharge.js';
+import { buildSubcontract } from '../../src/domain/subcontract/subcontract.js';
 import { buildSurveyRecord } from '../../src/domain/survey/record.js';
+import { buildAllowances } from '../../src/progress/productivity.js';
 import { addDays } from '../../src/domain/time/siteDate.js';
 import { createJob } from '../../src/store/job.js';
 import type { Job } from '../../src/store/job.js';
 import { putAll } from '../../src/store/repository.js';
 import { d } from './contextFixtures.js';
+import type { Rng } from './random.js';
 import { rng } from './random.js';
 
 export interface BigJobOptions {
@@ -26,6 +31,10 @@ export interface BigJobOptions {
   readonly packages?: number;
   /** Survey records booked per package. */
   readonly recordsPerPackage?: number;
+  /** Subcontract orders across the job, each with monthly applications. */
+  readonly subcontracts?: number;
+  /** Daily resource returns booked against the packages. */
+  readonly resourceReturns?: number;
   readonly seed?: number;
 }
 
@@ -168,5 +177,116 @@ export function bigJob(options: BigJobOptions = {}): Job {
   putAll(job.records, records);
   putAll(job.signOffs, signOffs);
   putAll(job.ncrs, ncrs);
+
+  loadCommercial(job, packageCount, options, random);
   return job;
+}
+
+/**
+ * The commercial side of a job this size.
+ *
+ * Kept in its own pass rather than woven into the package loop, because the
+ * two are sized by different things. A road job has two hundred packages and
+ * thirty subcontracts, and building the orders inside the package loop would
+ * tie one number to the other and hide whichever is actually slow.
+ */
+function loadCommercial(
+  job: Job,
+  packageCount: number,
+  options: BigJobOptions,
+  random: Rng,
+): void {
+  const orders = options.subcontracts ?? 30;
+  const returns = options.resourceReturns ?? 2000;
+
+  job.settings = {
+    ...job.settings,
+    haulRate: moneyFromMajor(1, 'GBP'),
+    outputAllowances: buildAllowances([
+      { stepId: 'strip', metresPerHour: 10 },
+      { stepId: 'excavate', metresPerHour: 12 },
+    ]),
+  };
+
+  for (let i = 0; i < orders; i += 1) {
+    const id = `SC-${String(i + 1).padStart(3, '0')}`;
+    job.subcontracts.add(
+      buildSubcontract({
+        id,
+        name: `earthworks package ${id}`,
+        contractor: `contractor ${String(i + 1)}`,
+        orderValue: moneyFromMajor(random.int(100_000, 900_000), 'GBP'),
+        packageIds: [`WP-${String(random.int(1, packageCount)).padStart(4, '0')}`],
+        placedOn: d('2024-12-02'),
+      }),
+    );
+
+    let paid = 0;
+    for (let period = 1; period <= 12; period += 1) {
+      const gross = paid + random.int(5000, 40_000);
+      const applicationId = `${id}-SA-${String(period).padStart(2, '0')}`;
+      job.paymentApplications.add({
+        id: applicationId,
+        subcontractId: id,
+        periodNumber: period,
+        appliedOn: addDays(d('2025-01-25'), (period - 1) * 30),
+        gross: moneyFromMajor(gross, 'GBP'),
+        previouslyPaid: moneyFromMajor(Math.round(paid * 0.95), 'GBP'),
+      });
+      if (random.bool(0.7)) {
+        job.paymentNotices.add({
+          applicationId,
+          servedOn: addDays(d('2025-01-25'), (period - 1) * 30 + random.int(28, 40)),
+          valued: moneyFromMajor(Math.round(gross * 0.95), 'GBP'),
+        });
+      }
+      paid = gross;
+    }
+
+    for (let n = 0; n < 3; n += 1) {
+      const incurredOn = addDays(d('2025-01-05'), random.int(0, 300));
+      job.contraCharges.add(
+        buildContraCharge({
+          id: `${id}-CC-${String(n)}`,
+          subcontractId: id,
+          reason: random.pick(['attendance', 'welfare', 'rectification', 'damage'] as const),
+          description: 'a charge against the order',
+          amount: moneyFromMajor(random.int(100, 8000), 'GBP'),
+          incurredOn,
+          ...(random.bool(0.6) ? { notifiedOn: addDays(incurredOn, random.int(0, 20)) } : {}),
+        }),
+      );
+    }
+  }
+
+  for (let i = 0; i < returns; i += 1) {
+    const packageId = `WP-${String(random.int(1, packageCount)).padStart(4, '0')}`;
+    job.resourceReturns.add(
+      buildResourceReturn({
+        id: `RR-${String(i).padStart(5, '0')}`,
+        packageId,
+        stepId: random.pick(['strip', 'excavate', 'place'] as const),
+        date: addDays(d('2025-01-06'), random.int(0, 400)),
+        labour: [
+          {
+            resourceId: 'GANG-EARTH',
+            description: 'earthworks gang',
+            count: random.int(2, 8),
+            hours: random.int(6, 12),
+            kind: random.pick(['working', 'working', 'standing', 'idle'] as const),
+          },
+        ],
+        plant: [
+          {
+            resourceId: 'PL-360',
+            description: '22t excavator',
+            count: 1,
+            hours: random.int(4, 10),
+            kind: 'working',
+          },
+        ],
+        returnedBy: 'A Kerrigan',
+      }),
+    );
+  }
 }
