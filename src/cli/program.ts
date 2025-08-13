@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { asCwError } from '../errors.js';
+import { asCwError, BadInputError } from '../errors.js';
 import type { Config } from '../config/config.js';
 import { configFromEnv, describeConfig, mergeConfig } from '../config/config.js';
 import { formatMoney } from '../domain/money/money.js';
@@ -9,6 +9,7 @@ import { formatQuantity } from '../domain/quantity/quantity.js';
 import { formatRate } from '../domain/money/rate.js';
 import { billAsAt } from '../domain/bill/revision.js';
 import { parseSiteDate } from '../domain/time/siteDate.js';
+import { describeFinding, diagnose, isHealthy } from '../app/doctor.js';
 import type { Service } from '../app/service.js';
 import {
   cashFlowFor,
@@ -472,6 +473,39 @@ export function buildProgram(deps: CliDeps): Command {
         written.push(path);
       }
       emit(deps, globals(), written.join('\n'), written);
+    });
+
+  /**
+   * Every check the job can fail before anybody looks at a number.
+   *
+   * Exits non zero on an error so it can be the first line of a nightly run.
+   * Warnings deliberately do not, because a job halfway through has packages
+   * with nothing measured against them and that is not a fault.
+   */
+  program
+    .command('doctor')
+    .description('check the job for references that go nowhere')
+    .option('--all', 'print the warnings as well as the errors')
+    .action(async (options: { all?: boolean }) => {
+      const service = await serviceFor(deps, globals());
+      const diagnosis = diagnose(service.job);
+      const shown =
+        options.all === true
+          ? diagnosis.findings
+          : diagnosis.findings.filter((f) => f.level === 'error');
+
+      const lines = [
+        ...diagnosis.blockers.map((blocker) => `error job: ${blocker}`),
+        ...shown.map(describeFinding),
+      ];
+      const text =
+        lines.length === 0
+          ? `nothing wrong, ${String(diagnosis.warnings)} warnings not shown`
+          : lines.join('\n');
+      emit(deps, globals(), text, diagnosis);
+      if (!isHealthy(diagnosis)) {
+        throw new BadInputError('the job has errors', { errors: diagnosis.errors });
+      }
     });
 
   program

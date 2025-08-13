@@ -8,6 +8,7 @@ import { formatQuantity } from '../domain/quantity/quantity.js';
 import type { SiteDate } from '../domain/time/siteDate.js';
 import { formatSiteDate, tryParseSiteDate } from '../domain/time/siteDate.js';
 import { rateMajor } from '../domain/money/rate.js';
+import { diagnose, isHealthy } from '../app/doctor.js';
 import type { Service } from '../app/service.js';
 import {
   cashFlowFor,
@@ -294,6 +295,28 @@ export function buildServer(service: Service): FastifyInstance {
   });
 
   app.get('/haul', () => haulPlanDto(haulPlan(service)));
+
+  /**
+   * The health check answers 200 with the findings rather than 500 on a job
+   * with problems. A monitor wants to know the server is up; a person wants to
+   * know the job is sound, and conflating the two makes the endpoint useless
+   * for both.
+   */
+  app.get('/doctor', () => {
+    const diagnosis = diagnose(service.job);
+    return {
+      healthy: isHealthy(diagnosis),
+      errors: diagnosis.errors,
+      warnings: diagnosis.warnings,
+      blockers: [...diagnosis.blockers],
+      findings: diagnosis.findings.map((item) => ({
+        level: item.level,
+        register: item.register,
+        subject: item.subject,
+        message: item.message,
+      })),
+    };
+  });
 
   app.get('/cash', (request) => {
     const query = request.query as Record<string, unknown>;
