@@ -58,6 +58,13 @@ import { renderDelayReport } from '../reporting/delayReport.js';
 import { renderSubcontractReport } from '../reporting/subcontractReport.js';
 import { muckAwaySchedule, renderHaulPlan } from '../reporting/haulReport.js';
 import { chaseInspections, renderLookahead } from '../reporting/lookaheadReport.js';
+import {
+  billCsv,
+  certificateCsv,
+  certificateTotalsCsv,
+  outturnCsv,
+  recordsCsv,
+} from '../reporting/csvExport.js';
 import { renderOutputReport } from '../reporting/outputReport.js';
 import { renderOutturn } from '../reporting/outturnReport.js';
 import { renderStrip } from '../reporting/stripMap.js';
@@ -482,6 +489,41 @@ export function buildProgram(deps: CliDeps): Command {
    * Warnings deliberately do not, because a job halfway through has packages
    * with nothing measured against them and that is not a fault.
    */
+  /**
+   * The spreadsheet export. One table a file, never a workbook.
+   *
+   * Everything downstream of this is a pivot table somebody built once and
+   * refreshes every month, and a file whose columns move breaks it silently.
+   * The five tables are therefore fixed, and a new one gets a new name rather
+   * than a new column on an old one.
+   */
+  const CSV_TABLES: Record<string, (service: Service, valuation: number) => string> = {
+    bill: (service, valuation) =>
+      billCsv(contextOf(service), periodOf(service, valuation).cutOff),
+    records: (service, valuation) =>
+      recordsCsv(contextOf(service), periodOf(service, valuation).cutOff),
+    certificate: (service, valuation) => certificateCsv(certificateFor(service, valuation)),
+    totals: (service, valuation) => certificateTotalsCsv(certificateFor(service, valuation)),
+    outturn: (service, valuation) => outturnCsv(outturnFor(service, valuation)),
+  };
+
+  program
+    .command('csv <table> <valuation> <file>')
+    .description(`write a table out as csv: ${Object.keys(CSV_TABLES).join(', ')}`)
+    .action(async (table: string, valuation: string, file: string) => {
+      const build = CSV_TABLES[table];
+      if (build === undefined) {
+        throw new BadInputError('no such table', {
+          table,
+          known: Object.keys(CSV_TABLES).join(', '),
+        });
+      }
+      const service = await serviceFor(deps, globals());
+      const text = build(service, Number(valuation));
+      await deps.writeText(file, text);
+      emit(deps, globals(), file, { file, rows: text.trimEnd().split('\n').length - 1 });
+    });
+
   program
     .command('doctor')
     .description('check the job for references that go nowhere')
