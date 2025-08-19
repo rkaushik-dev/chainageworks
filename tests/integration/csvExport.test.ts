@@ -84,12 +84,11 @@ describe('certificateTotalsCsv', () => {
       'measured work',
       'materials on site',
       'daywork',
-      'price adjustment',
       'gross valuation',
-      'retention held',
+      'less retention',
       'net valuation',
-      'previously certified',
-      'amount due',
+      'less previously certified',
+      'amount due this certificate',
     ]);
     expect(table.rows.at(-1)!.values[1]).toBe('15344.87');
   });

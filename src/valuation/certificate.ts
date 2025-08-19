@@ -206,3 +206,74 @@ export function bondReleased(certificate: Certificate): Money {
 export function bondHasLapsed(certificate: Certificate): boolean {
   return certificate.bond?.expired ?? false;
 }
+
+export interface CertificateLine {
+  readonly name: string;
+  readonly amount: Money;
+  /** True for the lines a reader is meant to stop at. */
+  readonly total: boolean;
+}
+
+/**
+ * The certificate as an ordered list of lines.
+ *
+ * One list, four readers: the terminal, the markdown pack, the api and the
+ * spreadsheet export. They had a copy each and the copies had already drifted
+ * to three different orderings, which is exactly the sort of difference nobody
+ * spots until a client compares the pdf against the csv.
+ *
+ * The optional lines are left out rather than printed as zero. A price
+ * adjustment row reading nothing invites the question of which index produced
+ * it, and on a fixed price contract the answer is that there is no clause.
+ */
+export function certificateLines(certificate: Certificate): CertificateLine[] {
+  const lines: CertificateLine[] = [
+    { name: 'measured work', amount: certificate.measuredWork, total: false },
+    { name: 'materials on site', amount: certificate.materialsOnSite, total: false },
+    { name: 'daywork', amount: certificate.daywork, total: false },
+  ];
+
+  const adjustment = certificate.priceAdjustment;
+  if (adjustment.factor.lines.length > 0) {
+    lines.push({
+      name: `price adjustment at ${(adjustment.factor.factor * 100).toFixed(3)}%`,
+      amount: adjustment.amount,
+      total: false,
+    });
+  }
+
+  lines.push({ name: 'gross valuation', amount: certificate.gross, total: true });
+
+  const bond = certificate.bond;
+  if (bond !== null) {
+    lines.push(
+      { name: 'retention due', amount: certificate.retention.held, total: false },
+      { name: `covered by bond ${bond.bond.id}`, amount: bond.released, total: false },
+    );
+  }
+
+  lines.push(
+    { name: 'less retention', amount: certificate.retentionHeld, total: false },
+    { name: 'net valuation', amount: certificate.netValuation, total: true },
+    {
+      name: 'less previously certified',
+      amount: certificate.previouslyCertified,
+      total: false,
+    },
+    { name: 'amount due this certificate', amount: certificate.amountDue, total: true },
+  );
+  return lines;
+}
+
+/** What the certificate warns about, in the order a reader meets it. */
+export function certificateNotes(certificate: Certificate): string[] {
+  const notes: string[] = [];
+  if (certificate.retention.capReached) notes.push('retention has reached its cap');
+  if (certificate.priceAdjustment.provisional) {
+    notes.push('the price adjustment rests on a provisional index figure');
+  }
+  if (bondHasLapsed(certificate)) {
+    notes.push('the retention bond has lapsed and the cash is being held again');
+  }
+  return notes;
+}

@@ -5,6 +5,7 @@ import { formatQuantity } from '../../domain/quantity/quantity.js';
 import { formatSiteDate } from '../../domain/time/siteDate.js';
 import { formatItemCode } from '../../domain/bill/itemCode.js';
 import type { Certificate } from '../../valuation/certificate.js';
+import { certificateLines, certificateNotes } from '../../valuation/certificate.js';
 import { describePeriod } from '../../valuation/period.js';
 import type { PackageLine, ProgressReport } from '../progressReport.js';
 import { heldLines, outstandingHoldPoints } from '../progressReport.js';
@@ -116,7 +117,6 @@ export function renderProgressReport(report: ProgressReport): string {
 
 /** The certificate as the one page a payer actually signs. */
 export function renderCertificate(certificate: Certificate): string {
-  const retention = certificate.retention;
   return [
     renderHeading(`payment certificate ${String(certificate.period.number)}`),
     '',
@@ -129,56 +129,12 @@ export function renderCertificate(certificate: Certificate): string {
     '',
     renderTable(
       [{ heading: 'item' }, { heading: 'amount', align: MONEY }],
-      [
-        ['measured work', formatMoney(certificate.measuredWork)],
-        ['materials on site', formatMoney(certificate.materialsOnSite)],
-        ['daywork', formatMoney(certificate.daywork)],
-        ...adjustmentRows(certificate),
-        ['gross valuation', formatMoney(certificate.gross)],
-        ...bondRows(certificate),
-        ['less retention', formatMoney(certificate.retentionHeld)],
-        ['net valuation', formatMoney(certificate.netValuation)],
-        ['less previously certified', formatMoney(certificate.previouslyCertified)],
-        ['amount due this certificate', formatMoney(certificate.amountDue)],
-      ],
+      certificateLines(certificate).map((line) => [line.name, formatMoney(line.amount)]),
     ),
-    ...(retention.capReached ? ['', 'retention has reached its cap'] : []),
-    ...(certificate.priceAdjustment.provisional
-      ? ['', 'the price adjustment rests on a provisional index figure']
-      : []),
+    ...(certificateNotes(certificate).length === 0
+      ? []
+      : ['', ...certificateNotes(certificate)]),
   ].join('\n');
-}
-
-/**
- * The adjustment line is left off entirely when the contract has no
- * fluctuation clause, rather than printed as nothing. A line reading zero
- * invites the reader to ask which index produced it, and on a fixed price
- * contract the answer is that there is no clause at all.
- */
-/**
- * The bond rows are left off a job with no bond, and the retention line reads
- * the same as it always did. On a job with one, both figures are printed: what
- * the retention account holds and what is actually kept in cash, because the
- * two diverge from the first certificate and everyone asks about it once.
- */
-function bondRows(certificate: Certificate): string[][] {
-  const bond = certificate.bond;
-  if (bond === null) return [];
-  return [
-    ['retention due', formatMoney(certificate.retention.held)],
-    [`covered by bond ${bond.bond.id}`, formatMoney(bond.released)],
-  ];
-}
-
-function adjustmentRows(certificate: Certificate): string[][] {
-  const adjustment = certificate.priceAdjustment;
-  if (adjustment.factor.lines.length === 0) return [];
-  return [
-    [
-      `price adjustment at ${(adjustment.factor.factor * 100).toFixed(3)}%`,
-      formatMoney(adjustment.amount),
-    ],
-  ];
 }
 
 /** The bill of quantities as a priced page. */

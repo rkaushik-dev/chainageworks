@@ -1,6 +1,7 @@
 import { formatMoney } from '../../domain/money/money.js';
 import { formatSiteDate } from '../../domain/time/siteDate.js';
 import type { Certificate } from '../../valuation/certificate.js';
+import { certificateLines, certificateNotes } from '../../valuation/certificate.js';
 import type { ProgressReport } from '../progressReport.js';
 import type { SubcontractReport } from '../subcontractReport.js';
 import type { Column } from './table.js';
@@ -26,6 +27,11 @@ export function markdownTable(
   return [heading, rule, ...body].join('\n');
 }
 
+/** Lift the first letter, because a markdown table reads as prose. */
+function sentenceCase(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 export function markdownHeading(text: string, level = 2): string {
   return `${'#'.repeat(level)} ${text}`;
 }
@@ -44,7 +50,6 @@ export function markdownPairs(pairs: readonly (readonly [string, string])[]): st
  * differences are the ones markdown forces.
  */
 export function certificateMarkdown(certificate: Certificate): string {
-  const retention = certificate.retention;
   const sections = [
     markdownHeading(`Payment certificate ${String(certificate.period.number)}`, 1),
     '',
@@ -57,32 +62,17 @@ export function certificateMarkdown(certificate: Certificate): string {
     '',
     markdownTable(
       [{ heading: 'Item' }, { heading: 'Amount', align: 'right' }],
-      [
-        ['Measured work', formatMoney(certificate.measuredWork)],
-        ['Materials on site', formatMoney(certificate.materialsOnSite)],
-        ['Daywork', formatMoney(certificate.daywork)],
-        ...(certificate.priceAdjustment.factor.lines.length === 0
-          ? []
-          : [
-              [
-                `Price adjustment at ${(certificate.priceAdjustment.factor.factor * 100).toFixed(3)}%`,
-                formatMoney(certificate.priceAdjustment.amount),
-              ],
-            ]),
-        ['Gross valuation', formatMoney(certificate.gross)],
-        ['Less retention', formatMoney(retention.held)],
-        ['Net valuation', formatMoney(certificate.netValuation)],
-        ['Less previously certified', formatMoney(certificate.previouslyCertified)],
-        ['**Amount due this certificate**', `**${formatMoney(certificate.amountDue)}**`],
-      ],
+      certificateLines(certificate).map((line) => {
+        const name = sentenceCase(line.name);
+        return line.name === 'amount due this certificate'
+          ? [`**${name}**`, `**${formatMoney(line.amount)}**`]
+          : [name, formatMoney(line.amount)];
+      }),
     ),
   ];
 
-  if (certificate.priceAdjustment.provisional) {
-    sections.push('', '> The price adjustment rests on a provisional index figure.');
-  }
-  if (retention.capReached) {
-    sections.push('', '> Retention has reached its cap.');
+  for (const note of certificateNotes(certificate)) {
+    sections.push('', `> ${sentenceCase(note)}.`);
   }
   return sections.join('\n');
 }

@@ -26,6 +26,7 @@ import { cellGlyph } from '../reporting/stripMap.js';
 import type { CashPoint } from '../valuation/cashFlow.js';
 import { peakExposure } from '../valuation/cashFlow.js';
 import type { Certificate } from '../valuation/certificate.js';
+import { certificateLines, certificateNotes } from '../valuation/certificate.js';
 import type { Outturn } from '../valuation/outturn.js';
 import { isOverContractSum, outturnParts } from '../valuation/outturn.js';
 import type { ValuationPeriod } from '../valuation/period.js';
@@ -137,6 +138,12 @@ export function certificateDto(certificate: Certificate): Record<string, unknown
   return {
     period: periodDto(certificate.period),
     billRevision: certificate.billRevision,
+    lines: certificateLines(certificate).map((line) => ({
+      name: line.name,
+      amount: moneyDto(line.amount),
+      total: line.total,
+    })),
+    notes: certificateNotes(certificate),
     measuredWork: moneyDto(certificate.measuredWork),
     materialsOnSite: moneyDto(certificate.materialsOnSite),
     daywork: moneyDto(certificate.daywork),

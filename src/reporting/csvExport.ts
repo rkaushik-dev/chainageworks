@@ -11,6 +11,7 @@ import { writeCsv } from '../io/csv.js';
 import type { SiteDate } from '../domain/time/siteDate.js';
 import type { ProgressContext } from '../progress/context.js';
 import type { Certificate } from '../valuation/certificate.js';
+import { certificateLines } from '../valuation/certificate.js';
 import type { Outturn } from '../valuation/outturn.js';
 
 /**
@@ -133,17 +134,7 @@ export function outturnCsv(outturn: Outturn): string {
 export function certificateTotalsCsv(certificate: Certificate): string {
   return writeCsv(
     ['item', 'amount'],
-    [
-      ['measured work', amount(certificate.measuredWork.minor)],
-      ['materials on site', amount(certificate.materialsOnSite.minor)],
-      ['daywork', amount(certificate.daywork.minor)],
-      ['price adjustment', amount(certificate.priceAdjustment.amount.minor)],
-      ['gross valuation', amount(certificate.gross.minor)],
-      ['retention held', amount(certificate.retentionHeld.minor)],
-      ['net valuation', amount(certificate.netValuation.minor)],
-      ['previously certified', amount(certificate.previouslyCertified.minor)],
-      ['amount due', amount(certificate.amountDue.minor)],
-    ],
+    certificateLines(certificate).map((line) => [line.name, amount(line.amount.minor)]),
   );
 }
 
