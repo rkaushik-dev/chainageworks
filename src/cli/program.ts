@@ -30,6 +30,7 @@ import {
   lookaheadFrom,
   outputFor,
   outturnFor,
+  variationsFor,
   loadRecords,
   loadResourceReturns,
   loadSignOffs,
@@ -67,6 +68,7 @@ import {
 } from '../reporting/csvExport.js';
 import { renderOutputReport } from '../reporting/outputReport.js';
 import { renderOutturn } from '../reporting/outturnReport.js';
+import { renderVariationReport } from '../reporting/variationReport.js';
 import { renderStrip } from '../reporting/stripMap.js';
 import { renderPairs, renderTable } from '../reporting/format/table.js';
 import type { Job } from '../store/job.js';
@@ -327,6 +329,15 @@ export function buildProgram(deps: CliDeps): Command {
     outturnFor,
     renderOutturn,
     (outturn) => outturn.total.minor,
+    'no such valuation',
+  );
+
+  valuationCommand(
+    'variations',
+    'the variation register, valued at a valuation',
+    variationsFor,
+    renderVariationReport,
+    (report) => report.lines.length,
     'no such valuation',
   );
 

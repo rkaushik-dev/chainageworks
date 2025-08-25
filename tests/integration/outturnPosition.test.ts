@@ -45,10 +45,11 @@ describe('outturnFor', () => {
     expect(outturnFor(fluctuating(), 2).priceAdjustment.provisional).toBe(false);
   });
 
-  it('leaves the fixed price job entirely alone', () => {
+  it('leaves the fixed price job unadjusted, whatever else is on it', () => {
     const outturn = outturnFor(createService(commercialJob(), DEFAULT_CONFIG), 3);
     expect(outturn.priceAdjustment.amount.minor).toBe(0);
-    expect(moneyMajor(outturn.total)).toBe(312_190);
+    expect(moneyMajor(outturn.total)).toBe(312_190 + moneyMajor(outturn.variations));
+    expect(moneyMajor(outturn.variations)).toBeGreaterThan(0);
   });
 
   it('still adds up once the clause and the damages are on', () => {

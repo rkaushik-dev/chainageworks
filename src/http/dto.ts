@@ -15,6 +15,8 @@ import { haulMoment, isBalanced } from '../domain/earthworks/allocation.js';
 import type { Lookahead } from '../progress/lookahead.js';
 import { fitsInWindow, readyNow, waitingOnInspection } from '../progress/lookahead.js';
 import type { OutputReport } from '../reporting/outputReport.js';
+import type { VariationReport } from '../reporting/variationReport.js';
+import { chaseAgreement, touchedItems } from '../reporting/variationReport.js';
 import { unallocatedHours } from '../reporting/outputReport.js';
 import { barredLines, claimedDays, unassessedLines } from '../reporting/delayReport.js';
 import type { SubcontractReport } from '../reporting/subcontractReport.js';
@@ -476,6 +478,29 @@ export function outturnDto(outturn: Outturn): Record<string, unknown> {
       movement: moneyDto(line.movement),
       percentComplete: line.percentComplete,
       extrapolated: line.extrapolated,
+    })),
+  };
+}
+
+export function variationReportDto(report: VariationReport): Record<string, unknown> {
+  return {
+    asAt: formatSiteDate(report.asAt),
+    inForce: moneyDto(report.inForce),
+    unagreed: moneyDto(report.unagreed),
+    proposed: report.proposed,
+    chase: chaseAgreement(report),
+    touchedItems: touchedItems(report),
+    orders: report.lines.map((line) => ({
+      id: line.variation.id,
+      reference: line.variation.reference,
+      title: line.variation.title,
+      status: line.variation.status,
+      extent:
+        line.variation.extent === null ? null : formatChainageRange(line.variation.extent),
+      bases: [...line.bases],
+      inForce: line.inForce,
+      agreed: line.agreed,
+      value: moneyDto(line.value),
     })),
   };
 }

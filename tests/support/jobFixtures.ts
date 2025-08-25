@@ -10,7 +10,9 @@ import { buildAdjustmentTerms } from '../../src/domain/fluctuation/adjustment.js
 import { buildIndexSeries } from '../../src/domain/fluctuation/index.js';
 import { buildResourceReturn } from '../../src/domain/resource/return.js';
 import { quantity } from '../../src/domain/quantity/quantity.js';
+import { rate } from '../../src/domain/money/rate.js';
 import { buildContraCharge } from '../../src/domain/subcontract/contraCharge.js';
+import { buildVariation } from '../../src/domain/variation/variation.js';
 import { buildSubcontract } from '../../src/domain/subcontract/subcontract.js';
 import { buildAllowances } from '../../src/progress/productivity.js';
 import { parseStation } from '../../src/domain/chainage/station.js';
@@ -247,6 +249,59 @@ export function commercialJob(): Job {
     servedOn: d('2025-03-28'),
     valued: gbp(85_000),
   });
+
+  job.variations.add(
+    buildVariation({
+      id: 'VO-01',
+      reference: 'VO/2025/001',
+      title: 'extra rock excavation at the cutting',
+      status: 'instructed',
+      instructedOn: d('2025-02-10'),
+      extent: range('12+300', '12+500'),
+      items: [
+        {
+          code: parseItemCode('E423.1'),
+          quantityChange: quantity(500, 'm3'),
+          rate: null,
+          basis: 'bill_rates',
+        },
+      ],
+    }),
+  );
+  job.variations.add(
+    buildVariation({
+      id: 'VO-02',
+      reference: 'VO/2025/002',
+      title: 'temporary access off the haul road',
+      status: 'agreed',
+      instructedOn: d('2025-02-20'),
+      agreedOn: d('2025-03-06'),
+      items: [
+        {
+          code: parseItemCode('E532.1'),
+          quantityChange: quantity(200, 'm3'),
+          rate: rate(9.4, 'GBP', 'm3'),
+          basis: 'pro_rata',
+        },
+      ],
+    }),
+  );
+  job.variations.add(
+    buildVariation({
+      id: 'VO-03',
+      reference: 'VO/2025/003',
+      title: 'additional drainage at the low point',
+      status: 'proposed',
+      items: [
+        {
+          code: parseItemCode('E423.1'),
+          quantityChange: quantity(80, 'm3'),
+          rate: null,
+          basis: 'bill_rates',
+        },
+      ],
+    }),
+  );
 
   job.contraCharges.add(
     buildContraCharge({

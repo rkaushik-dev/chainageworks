@@ -1,7 +1,7 @@
 import { BadInputError, ConflictError } from '../errors.js';
 import { buildBill } from '../domain/bill/bill.js';
 import type { BillItem } from '../domain/bill/billItem.js';
-import { firstRevision } from '../domain/bill/revision.js';
+import { billAsAt, firstRevision } from '../domain/bill/revision.js';
 import type { Ncr } from '../domain/itp/ncr.js';
 import type { Standdown } from '../domain/time/calendar.js';
 import type { Allocation } from '../domain/earthworks/allocation.js';
@@ -35,6 +35,8 @@ import { buildDelayReport } from '../reporting/delayReport.js';
 import type { Lookahead } from '../progress/lookahead.js';
 import { buildLookahead } from '../progress/lookahead.js';
 import type { OutputReport } from '../reporting/outputReport.js';
+import type { VariationReport } from '../reporting/variationReport.js';
+import { buildVariationReport } from '../reporting/variationReport.js';
 import { buildOutputReport } from '../reporting/outputReport.js';
 import type { ProgressReport } from '../reporting/progressReport.js';
 import { buildProgressReport } from '../reporting/progressReport.js';
@@ -280,6 +282,23 @@ export function outturnFor(service: Service, number: number): Outturn {
     delayEvents: job.delayEvents.all(),
     calendar: jobCalendar(job),
   });
+}
+
+/**
+ * The variation register at a valuation cut-off.
+ *
+ * Valued against the bill revision in force at that cut-off, not the latest
+ * one. A variation that was priced at last year's rates stays priced at last
+ * year's rates on last year's certificate, however many revisions have landed
+ * since.
+ */
+export function variationsFor(service: Service, number: number): VariationReport {
+  const asAt = periodOf(service, number).cutOff;
+  return buildVariationReport(
+    billAsAt(contextOf(service).billHistory, asAt),
+    service.job.variations.all(),
+    asAt,
+  );
 }
 
 export interface LookaheadOptions {

@@ -66,7 +66,7 @@ describe('a full job through the file', () => {
 
   it('brings back a register that was carrying nothing', () => {
     expect(again.materials.count()).toBe(0);
-    expect(again.variations.count()).toBe(0);
+    expect(again.dayworkSheets.count()).toBe(0);
   });
 
   it('survives a second trip unchanged', () => {
