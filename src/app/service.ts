@@ -34,6 +34,8 @@ import type { DelayReport } from '../reporting/delayReport.js';
 import { buildDelayReport } from '../reporting/delayReport.js';
 import type { Lookahead } from '../progress/lookahead.js';
 import { buildLookahead } from '../progress/lookahead.js';
+import type { RiskPosition } from '../domain/risk/earlyWarning.js';
+import { riskPosition } from '../domain/risk/earlyWarning.js';
 import type { OutputReport } from '../reporting/outputReport.js';
 import type { VariationReport } from '../reporting/variationReport.js';
 import { buildVariationReport } from '../reporting/variationReport.js';
@@ -298,6 +300,24 @@ export function variationsFor(service: Service, number: number): VariationReport
     billAsAt(contextOf(service).billHistory, asAt),
     service.job.variations.all(),
     asAt,
+  );
+}
+
+/**
+ * The early warning register at a valuation cut-off.
+ *
+ * Run at the cut-off like everything else, so the risk a report carries is the
+ * risk that was on the register when the valuation was worked out. A register
+ * read as at today would let a risk closed last week quietly disappear out of
+ * a certificate issued the month before.
+ */
+export function risksFor(service: Service, number: number): RiskPosition {
+  const job = service.job;
+  return riskPosition(
+    job.earlyWarnings.all(),
+    periodOf(service, number).cutOff,
+    job.settings.currency,
+    job.settings.riskMeetingDays,
   );
 }
 

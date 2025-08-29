@@ -40,6 +40,7 @@ import {
 } from './delay.js';
 import { defectFromJson, defectToJson } from './defects.js';
 import { retentionBondFromJson, retentionBondToJson } from './bond.js';
+import { earlyWarningFromJson, earlyWarningToJson } from './risk.js';
 import {
   haulLinkFromJson,
   haulLinkToJson,
@@ -128,6 +129,7 @@ export interface JobDocument {
   readonly indices: readonly Record<string, unknown>[];
   readonly contraCharges: readonly Record<string, unknown>[];
   readonly haulSites: readonly Record<string, unknown>[];
+  readonly earlyWarnings: readonly Record<string, unknown>[];
   readonly holidays: readonly string[];
   readonly standdowns: readonly Record<string, unknown>[];
 }
@@ -202,6 +204,7 @@ function settingsToJson(settings: JobSettings): Record<string, unknown> {
     adjustment:
       settings.adjustment === null ? null : adjustmentTermsToJson(settings.adjustment),
     contraNotifyDays: settings.contraNotifyDays,
+    riskMeetingDays: settings.riskMeetingDays,
     haulRate: moneyToJson(settings.haulRate),
     haulLinks: settings.haulLinks.map(haulLinkToJson),
     tolerances: settings.tolerances.rules.map((rule) => ({
@@ -715,6 +718,13 @@ const REGISTERS: readonly RegisterCodec[] = [
     contraChargeFromJson,
   ),
   register('haulSites', 'haul sites', (j) => j.haulSites, haulSiteToJson, haulSiteFromJson),
+  register(
+    'earlyWarnings',
+    'early warnings',
+    (j) => j.earlyWarnings,
+    earlyWarningToJson,
+    earlyWarningFromJson,
+  ),
 ];
 
 export function jobToJson(job: Job): JobDocument {
@@ -749,6 +759,7 @@ export function jobToJson(job: Job): JobDocument {
     indices: at('indices'),
     contraCharges: at('contraCharges'),
     haulSites: at('haulSites'),
+    earlyWarnings: at('earlyWarnings'),
     holidays: job.holidays.map(dateToJson),
     standdowns: job.standdowns.map(standdownToJson),
   };
@@ -789,6 +800,7 @@ export function jobFromJson(value: unknown): Job {
     ).map(allowanceFromJson),
     adjustment: adjustmentTermsFromJson(settings['adjustment']),
     contraNotifyDays: Number(settings['contraNotifyDays'] ?? 14),
+    riskMeetingDays: Number(settings['riskMeetingDays'] ?? 14),
     haulRate:
       settings['haulRate'] === undefined || settings['haulRate'] === null
         ? { minor: 0, currency: currencyFromJson(settings['currency']) }

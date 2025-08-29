@@ -14,6 +14,8 @@ import type { Allocation } from '../domain/earthworks/allocation.js';
 import { haulMoment, isBalanced } from '../domain/earthworks/allocation.js';
 import type { Lookahead } from '../progress/lookahead.js';
 import { fitsInWindow, readyNow, waitingOnInspection } from '../progress/lookahead.js';
+import type { RiskPosition } from '../domain/risk/earlyWarning.js';
+import { expectedCost, unowned } from '../domain/risk/earlyWarning.js';
 import type { OutputReport } from '../reporting/outputReport.js';
 import type { VariationReport } from '../reporting/variationReport.js';
 import { chaseAgreement, touchedItems } from '../reporting/variationReport.js';
@@ -501,6 +503,32 @@ export function variationReportDto(report: VariationReport): Record<string, unkn
       inForce: line.inForce,
       agreed: line.agreed,
       value: moneyDto(line.value),
+    })),
+  };
+}
+
+export function riskPositionDto(position: RiskPosition): Record<string, unknown> {
+  return {
+    asAt: formatSiteDate(position.asAt),
+    expected: moneyDto(position.expected),
+    worstCase: moneyDto(position.worstCase),
+    carried: moneyDto(position.carried),
+    delayDays: position.delayDays,
+    overdueMeetings: position.overdueMeetings.map((warning) => warning.id),
+    unowned: unowned(position).map((warning) => warning.id),
+    warnings: position.open.map((warning) => ({
+      id: warning.id,
+      reference: warning.reference,
+      description: warning.description,
+      owner: warning.owner,
+      state: warning.state,
+      extent: warning.extent === null ? null : formatChainageRange(warning.extent),
+      raisedOn: formatSiteDate(warning.raisedOn),
+      meetingOn: warning.meetingOn === null ? null : formatSiteDate(warning.meetingOn),
+      costIfItHappens: moneyDto(warning.costIfItHappens),
+      likelihood: percentDto(warning.likelihood),
+      expected: moneyDto(expectedCost(warning)),
+      delayDays: warning.delayDays,
     })),
   };
 }

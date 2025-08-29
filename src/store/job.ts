@@ -27,6 +27,8 @@ import type { Subcontract } from '../domain/subcontract/subcontract.js';
 import { DEFAULT_CONTRA_NOTIFY_DAYS } from '../domain/subcontract/subcontract.js';
 import type { AdjustmentTerms } from '../domain/fluctuation/adjustment.js';
 import type { IndexSeries } from '../domain/fluctuation/index.js';
+import type { EarlyWarning } from '../domain/risk/earlyWarning.js';
+import { DEFAULT_MEETING_DAYS } from '../domain/risk/earlyWarning.js';
 import type { ResourceReturn } from '../domain/resource/return.js';
 import type { SurveyRecord } from '../domain/survey/record.js';
 import type { ToleranceSet } from '../domain/survey/tolerance.js';
@@ -70,6 +72,8 @@ export interface JobSettings {
   readonly adjustment: AdjustmentTerms | null;
   /** Days to notify a subcontractor of a charge the order does not cover. */
   readonly contraNotifyDays: number;
+  /** Days from an early warning to the meeting the contract wants. */
+  readonly riskMeetingDays: number;
   /** What it costs to move a cubic metre one kilometre. */
   readonly haulRate: Money;
   /** The haul distances between the sites on the job. */
@@ -97,6 +101,7 @@ export interface JobSettingsInput {
   readonly outputAllowances?: readonly OutputAllowance[];
   readonly adjustment?: AdjustmentTerms | null;
   readonly contraNotifyDays?: number;
+  readonly riskMeetingDays?: number;
   readonly haulRate?: Money;
   readonly haulLinks?: readonly HaulLink[];
   readonly tolerances?: ToleranceSet;
@@ -139,6 +144,7 @@ export interface Job {
   readonly indices: Repository<IndexSeries>;
   readonly contraCharges: Repository<ContraCharge>;
   readonly haulSites: Repository<HaulSite>;
+  readonly earlyWarnings: Repository<EarlyWarning>;
   holidays: readonly SiteDate[];
   standdowns: readonly Standdown[];
 }
@@ -172,6 +178,7 @@ export function jobSettings(input: JobSettingsInput): JobSettings {
     outputAllowances: buildAllowances(input.outputAllowances ?? []),
     adjustment: input.adjustment ?? null,
     contraNotifyDays: input.contraNotifyDays ?? DEFAULT_CONTRA_NOTIFY_DAYS,
+    riskMeetingDays: input.riskMeetingDays ?? DEFAULT_MEETING_DAYS,
     haulRate: input.haulRate ?? { minor: 0, currency },
     haulLinks: [...(input.haulLinks ?? [])],
     tolerances: input.tolerances ?? DEFAULT_TOLERANCES,
@@ -218,6 +225,7 @@ export function createJob(input: JobSettingsInput): Job {
     indices: inMemoryRepository<IndexSeries>('index series', (i) => i.id),
     contraCharges: inMemoryRepository<ContraCharge>('contra charge', (c) => c.id),
     haulSites: inMemoryRepository<HaulSite>('haul site', (h) => h.id),
+    earlyWarnings: inMemoryRepository<EarlyWarning>('early warning', (w) => w.id),
     holidays: [],
     standdowns: [],
   };

@@ -30,6 +30,7 @@ import {
   lookaheadFrom,
   outputFor,
   outturnFor,
+  risksFor,
   variationsFor,
   loadRecords,
   loadResourceReturns,
@@ -68,6 +69,7 @@ import {
 } from '../reporting/csvExport.js';
 import { renderOutputReport } from '../reporting/outputReport.js';
 import { renderOutturn } from '../reporting/outturnReport.js';
+import { renderRiskReport } from '../reporting/riskReport.js';
 import { renderVariationReport } from '../reporting/variationReport.js';
 import { renderStrip } from '../reporting/stripMap.js';
 import { renderPairs, renderTable } from '../reporting/format/table.js';
@@ -338,6 +340,15 @@ export function buildProgram(deps: CliDeps): Command {
     variationsFor,
     renderVariationReport,
     (report) => report.lines.length,
+    'no such valuation',
+  );
+
+  valuationCommand(
+    'risks',
+    'the early warning register at a valuation',
+    risksFor,
+    renderRiskReport,
+    (position) => position.open.length,
     'no such valuation',
   );
 

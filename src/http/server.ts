@@ -27,6 +27,7 @@ import {
   lookaheadFrom,
   outputFor,
   outturnFor,
+  risksFor,
   variationsFor,
   loadRecords,
   loadResourceReturns,
@@ -50,6 +51,7 @@ import {
   moneyDto,
   outputReportDto,
   outturnDto,
+  riskPositionDto,
   variationReportDto,
   periodDto,
   progressReportDto,
@@ -154,6 +156,7 @@ export function buildServer(service: Service): FastifyInstance {
         resourceReturns: job.resourceReturns.count(),
         indices: job.indices.count(),
         haulSites: job.haulSites.count(),
+        earlyWarnings: job.earlyWarnings.count(),
       },
       blockers: jobBlockers(job),
     };
@@ -267,6 +270,7 @@ export function buildServer(service: Service): FastifyInstance {
   valuationRoute('output', outputFor, outputReportDto);
   valuationRoute('outturn', outturnFor, outturnDto);
   valuationRoute('variations', variationsFor, variationReportDto);
+  valuationRoute('risks', risksFor, riskPositionDto);
 
   app.get('/valuations/:number/strip/:packageId', (request) => {
     const params = request.params as { number: string; packageId: string };

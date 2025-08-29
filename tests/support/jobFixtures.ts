@@ -11,6 +11,7 @@ import { buildIndexSeries } from '../../src/domain/fluctuation/index.js';
 import { buildResourceReturn } from '../../src/domain/resource/return.js';
 import { quantity } from '../../src/domain/quantity/quantity.js';
 import { rate } from '../../src/domain/money/rate.js';
+import { buildEarlyWarning } from '../../src/domain/risk/earlyWarning.js';
 import { buildContraCharge } from '../../src/domain/subcontract/contraCharge.js';
 import { buildVariation } from '../../src/domain/variation/variation.js';
 import { buildSubcontract } from '../../src/domain/subcontract/subcontract.js';
@@ -249,6 +250,33 @@ export function commercialJob(): Job {
     servedOn: d('2025-03-28'),
     valued: gbp(85_000),
   });
+
+  job.earlyWarnings.add(
+    buildEarlyWarning({
+      id: 'EW-01',
+      reference: 'EW/2025/001',
+      description: 'unrecorded services under the roundabout',
+      owner: 'employer',
+      extent: range('12+400', '12+600'),
+      raisedOn: d('2025-02-10'),
+      meetingOn: d('2025-02-18'),
+      costIfItHappens: gbp(60_000),
+      likelihood: percent(40),
+      delayDays: 12,
+    }),
+  );
+  job.earlyWarnings.add(
+    buildEarlyWarning({
+      id: 'EW-02',
+      reference: 'EW/2025/002',
+      description: 'soft spots in the formation south of the bridge',
+      owner: 'contractor',
+      raisedOn: d('2025-02-20'),
+      costIfItHappens: gbp(20_000),
+      likelihood: percent(75),
+      delayDays: 5,
+    }),
+  );
 
   job.variations.add(
     buildVariation({
