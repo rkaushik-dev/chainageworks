@@ -106,7 +106,28 @@ function dateQuery(raw: unknown, fallback: SiteDate): SiteDate {
  * of what this API is used for.
  */
 export function buildServer(service: Service): FastifyInstance {
-  const app = Fastify({ logger: false });
+  const app = Fastify({
+    logger: false,
+    // A site export is the largest thing anybody posts, and a large one is
+    // eight thousand rows. Two megabytes leaves room for that and refuses the
+    // request that is actually somebody's photo of a site diary.
+    bodyLimit: 2 * 1024 * 1024,
+    // A csv import names one register, so a long path is a mistake rather
+    // than a request. Refusing it here keeps the router from walking it.
+    maxParamLength: 200,
+  });
+
+  /**
+   * Every response carries the request id it was answered under.
+   *
+   * Fastify generates one anyway; putting it on the response is what makes it
+   * useful, because the only time anybody wants it is when they are quoting a
+   * failure back and the log is the other half of the story.
+   */
+  app.addHook('onSend', (request, reply, payload, done) => {
+    void reply.header('x-request-id', request.id);
+    done(null, payload);
+  });
 
   app.addContentTypeParser(
     ['text/csv', 'text/plain'],
@@ -121,7 +142,24 @@ export function buildServer(service: Service): FastifyInstance {
     void reply.status(failure.status).send(failure.body);
   });
 
-  app.setNotFoundHandler((_request, reply) => {
+  /**
+   * A path this server knows reached with a method it does not is a 405 with
+   * the methods that would have worked, rather than a 404. The difference
+   * matters to a client that is one line of code away from working.
+   */
+  app.setNotFoundHandler((request, reply) => {
+    const allowed = methodsFor(app, request.url);
+    if (allowed.length > 0) {
+      void reply
+        .status(405)
+        .header('allow', allowed.join(', '))
+        .send({
+          code: 'unsupported',
+          message: `that route answers ${allowed.join(', ')}`,
+          details: { method: request.method, url: request.url },
+        });
+      return;
+    }
     void reply.status(404).send({
       code: 'not_found',
       message: 'no such route',
@@ -130,6 +168,18 @@ export function buildServer(service: Service): FastifyInstance {
   });
 
   app.get('/health', () => ({ status: 'ok' }));
+
+  /**
+   * Every route this server answers, which is the only documentation that
+   * cannot go stale. Read off the router rather than kept in a list, because a
+   * list beside the routes is a list that stops matching them.
+   */
+  app.get('/routes', () => ({
+    routes: routeEntries(app).map((entry) => ({
+      path: entry.path,
+      methods: [...entry.methods],
+    })),
+  }));
 
   app.get('/job', () => {
     const job = service.job;
@@ -370,4 +420,57 @@ export function buildServer(service: Service): FastifyInstance {
   importRoute('/import/pay-less', loadPayLessNotices);
 
   return app;
+}
+
+export interface RouteEntry {
+  readonly path: string;
+  readonly methods: readonly string[];
+}
+
+/**
+ * Every route the server answers, read off the printed route tree.
+ *
+ * Fastify has no public lookup for its routes, so the tree it prints is
+ * parsed. That is ugly, and the alternative is a table of paths kept beside
+ * the routes by hand, which stops matching them the first week.
+ *
+ * The tree nests shared prefixes, so the parse has to carry a stack rather
+ * than read each line on its own. Reading the lines flat makes the child of
+ * `/packages` look like a top level `/:id`, which then matches every one
+ * segment path there is.
+ */
+export function routeEntries(app: FastifyInstance): RouteEntry[] {
+  const entries: RouteEntry[] = [];
+  const stack: string[] = [];
+
+  for (const line of app.printRoutes({ commonPrefix: false }).split('\n')) {
+    const match =
+      /^((?:(?:\u2502 {3}| {4})*))(?:\u251c\u2500\u2500|\u2514\u2500\u2500)? ?(\/\S*)\s+\(([^)]+)\)/.exec(
+        line,
+      );
+    if (match === null) continue;
+    const depth = Math.floor((match[1] ?? '').length / 4);
+    stack.length = depth;
+    stack.push(match[2] ?? '');
+    entries.push({
+      path: stack.join(''),
+      methods: (match[3] ?? '').split(',').map((method) => method.trim()),
+    });
+  }
+  return entries;
+}
+
+/** The methods a path would answer, so a wrong method can say what to use. */
+function methodsFor(app: FastifyInstance, url: string): string[] {
+  const path = url.split('?')[0] ?? url;
+  const segments = path.split('/').filter((part) => part.length > 0);
+  const methods = new Set<string>();
+
+  for (const entry of routeEntries(app)) {
+    const route = entry.path.split('/').filter((part) => part.length > 0);
+    if (route.length !== segments.length) continue;
+    const fits = route.every((part, index) => part.startsWith(':') || part === segments[index]);
+    if (fits) for (const method of entry.methods) methods.add(method);
+  }
+  return [...methods].sort();
 }
