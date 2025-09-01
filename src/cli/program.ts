@@ -10,6 +10,7 @@ import { formatRate } from '../domain/money/rate.js';
 import { billAsAt } from '../domain/bill/revision.js';
 import { parseSiteDate } from '../domain/time/siteDate.js';
 import { describeFinding, diagnose, isHealthy } from '../app/doctor.js';
+import { commandEntries, referenceLines, referenceMarkdown } from './reference.js';
 import type { Service } from '../app/service.js';
 import {
   cashFlowFor,
@@ -544,6 +545,20 @@ export function buildProgram(deps: CliDeps): Command {
       const text = build(service, Number(valuation));
       await deps.writeText(file, text);
       emit(deps, globals(), file, { file, rows: text.trimEnd().split('\n').length - 1 });
+    });
+
+  program
+    .command('commands')
+    .description('the command reference, read off the command tree itself')
+    .option('--markdown-to <file>', 'write the reference out as markdown')
+    .action(async (options: { markdownTo?: string }) => {
+      const entries = commandEntries(program);
+      if (options.markdownTo !== undefined) {
+        await deps.writeText(options.markdownTo, referenceMarkdown(program));
+        emit(deps, globals(), options.markdownTo, { file: options.markdownTo });
+        return;
+      }
+      emit(deps, globals(), referenceLines(program).join('\n'), entries);
     });
 
   program
