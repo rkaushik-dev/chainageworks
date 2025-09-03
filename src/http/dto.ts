@@ -17,6 +17,8 @@ import { fitsInWindow, readyNow, waitingOnInspection } from '../progress/lookahe
 import type { RiskPosition } from '../domain/risk/earlyWarning.js';
 import { expectedCost, unowned } from '../domain/risk/earlyWarning.js';
 import type { OutputReport } from '../reporting/outputReport.js';
+import type { RevisionReport } from '../reporting/revisionReport.js';
+import { rateChanges } from '../reporting/revisionReport.js';
 import type { VariationReport } from '../reporting/variationReport.js';
 import { chaseAgreement, touchedItems } from '../reporting/variationReport.js';
 import { unallocatedHours } from '../reporting/outputReport.js';
@@ -529,6 +531,23 @@ export function riskPositionDto(position: RiskPosition): Record<string, unknown>
       likelihood: percentDto(warning.likelihood),
       expected: moneyDto(expectedCost(warning)),
       delayDays: warning.delayDays,
+    })),
+  };
+}
+
+export function revisionReportDto(report: RevisionReport): Record<string, unknown> {
+  return {
+    rateChanges: rateChanges(report),
+    steps: report.steps.map((step) => ({
+      from: step.from.reference,
+      to: step.to.reference,
+      effectiveFrom: formatSiteDate(step.to.effectiveFrom),
+      netMovement: moneyDto(step.diff.netDelta),
+      changes: step.diff.changes.map((change) => ({
+        code: formatItemCode(change.code),
+        kind: change.kind,
+        delta: moneyDto(change.delta),
+      })),
     })),
   };
 }

@@ -27,6 +27,7 @@ import {
   lookaheadFrom,
   outputFor,
   outturnFor,
+  revisionsFor,
   risksFor,
   variationsFor,
   loadRecords,
@@ -51,6 +52,7 @@ import {
   moneyDto,
   outputReportDto,
   outturnDto,
+  revisionReportDto,
   riskPositionDto,
   variationReportDto,
   periodDto,
@@ -352,6 +354,8 @@ export function buildServer(service: Service): FastifyInstance {
   });
 
   app.get('/haul', () => haulPlanDto(haulPlan(service)));
+
+  app.get('/revisions', () => revisionReportDto(revisionsFor(service)));
 
   /**
    * The health check answers 200 with the findings rather than 500 on a job

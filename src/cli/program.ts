@@ -31,6 +31,7 @@ import {
   lookaheadFrom,
   outputFor,
   outturnFor,
+  revisionsFor,
   risksFor,
   variationsFor,
   loadRecords,
@@ -70,6 +71,7 @@ import {
 } from '../reporting/csvExport.js';
 import { renderOutputReport } from '../reporting/outputReport.js';
 import { renderOutturn } from '../reporting/outturnReport.js';
+import { rateChanges, renderRevisionReport } from '../reporting/revisionReport.js';
 import { renderRiskReport } from '../reporting/riskReport.js';
 import { renderVariationReport } from '../reporting/variationReport.js';
 import { renderStrip } from '../reporting/stripMap.js';
@@ -559,6 +561,21 @@ export function buildProgram(deps: CliDeps): Command {
         return;
       }
       emit(deps, globals(), referenceLines(program).join('\n'), entries);
+    });
+
+  program
+    .command('revisions')
+    .description('what each revision of the bill did to the one before it')
+    .option('--rates', 'print only the rate movements')
+    .action(async (options: { rates?: boolean }) => {
+      const service = await serviceFor(deps, globals());
+      const report = revisionsFor(service);
+      if (options.rates === true) {
+        const moves = rateChanges(report);
+        emit(deps, globals(), moves.join('\n'), moves);
+        return;
+      }
+      emit(deps, globals(), renderRevisionReport(report), report.steps.length);
     });
 
   program

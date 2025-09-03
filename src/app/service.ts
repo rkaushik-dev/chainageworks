@@ -37,6 +37,8 @@ import { buildLookahead } from '../progress/lookahead.js';
 import type { RiskPosition } from '../domain/risk/earlyWarning.js';
 import { riskPosition } from '../domain/risk/earlyWarning.js';
 import type { OutputReport } from '../reporting/outputReport.js';
+import type { RevisionReport } from '../reporting/revisionReport.js';
+import { buildRevisionReport } from '../reporting/revisionReport.js';
 import type { VariationReport } from '../reporting/variationReport.js';
 import { buildVariationReport } from '../reporting/variationReport.js';
 import { buildOutputReport } from '../reporting/outputReport.js';
@@ -319,6 +321,17 @@ export function risksFor(service: Service, number: number): RiskPosition {
     job.settings.currency,
     job.settings.riskMeetingDays,
   );
+}
+
+/**
+ * Every revision of the bill against the one before it.
+ *
+ * Not keyed on a valuation, because the whole history is the answer. A reader
+ * asking what happened to the rates wants the revision that moved them, not
+ * the state of the bill on some particular cut-off.
+ */
+export function revisionsFor(service: Service): RevisionReport {
+  return buildRevisionReport(contextOf(service).billHistory);
 }
 
 export interface LookaheadOptions {
