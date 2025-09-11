@@ -108,13 +108,9 @@ function configFor(deps: CliDeps, options: GlobalOptions): Config {
   return options.file === undefined ? base : mergeConfig(base, { jobFile: options.file });
 }
 
-async function serviceFor(deps: CliDeps, options: GlobalOptions) {
+async function serviceFor(deps: CliDeps, options: GlobalOptions): Promise<Service> {
   const config = configFor(deps, options);
   return createService(await deps.loadJob(config.jobFile), config);
-}
-
-function emit(deps: CliDeps, options: GlobalOptions, text: string, value: unknown): void {
-  deps.out(options.json === true ? JSON.stringify(value, null, 2) : text);
 }
 
 function importSummary<T>(report: ImportReport<T>): Record<string, unknown> {
@@ -152,11 +148,25 @@ export function buildProgram(deps: CliDeps): Command {
 
   const globals = (): GlobalOptions => program.opts<GlobalOptions>();
 
+  /**
+   * The two things every command does, bound once.
+   *
+   * Threading the deps and the global options through every action by hand was
+   * two arguments of noise on every line that did any work, and it went wrong
+   * the same way twice: a command read the options before commander had parsed
+   * them. Reading them inside the closure, at the moment the action runs, is
+   * the only order that is always right.
+   */
+  const load = (): Promise<Service> => serviceFor(deps, globals());
+  const print = (text: string, value: unknown): void => {
+    deps.out(globals().json === true ? JSON.stringify(value, null, 2) : text);
+  };
+
   program
     .command('status')
     .description('what the job holds and what it is missing')
     .action(async () => {
-      const service = await serviceFor(deps, globals());
+      const service = await load();
       const job = service.job;
       const blockers = jobBlockers(job);
       const text = renderPairs([
@@ -169,7 +179,7 @@ export function buildProgram(deps: CliDeps): Command {
         ['open reports', String(job.ncrs.where((n) => n.status === 'open').length)],
         ['blockers', blockers.length === 0 ? 'none' : blockers.join('; ')],
       ]);
-      emit(deps, globals(), text, {
+      print(text, {
         id: job.settings.id,
         name: job.settings.name,
         blockers,
@@ -181,7 +191,7 @@ export function buildProgram(deps: CliDeps): Command {
     .description('the settings this run would use')
     .action(() => {
       const config = configFor(deps, globals());
-      emit(deps, globals(), describeConfig(config), config);
+      print(describeConfig(config), config);
     });
 
   program
@@ -189,7 +199,7 @@ export function buildProgram(deps: CliDeps): Command {
     .description('the bill in force on a date')
     .option('--as-at <date>', 'the date to price at')
     .action(async (options: { asAt?: string }) => {
-      const service = await serviceFor(deps, globals());
+      const service = await load();
       const asAt =
         options.asAt === undefined
           ? scheduleOf(service, 1).periods[0]!.cutOff
@@ -211,14 +221,14 @@ export function buildProgram(deps: CliDeps): Command {
           item.kind,
         ]),
       );
-      emit(deps, globals(), text, bill.items.length);
+      print(text, bill.items.length);
     });
 
   program
     .command('packages')
     .description('the work package register')
     .action(async () => {
-      const service = await serviceFor(deps, globals());
+      const service = await load();
       const text = renderTable(
         [
           { heading: 'package' },
@@ -237,7 +247,7 @@ export function buildProgram(deps: CliDeps): Command {
             String(pkg.allocations.length),
           ]),
       );
-      emit(deps, globals(), text, service.job.packages.count());
+      print(text, service.job.packages.count());
     });
 
   /**
@@ -259,15 +269,15 @@ export function buildProgram(deps: CliDeps): Command {
       .command(`${name} <valuation>`)
       .description(description)
       .action(async (valuation: string) => {
-        const service = await serviceFor(deps, globals());
+        const service = await load();
         const report = build(service, Number(valuation));
         if (report === null) {
-          emit(deps, globals(), absent, null);
+          print(absent, null);
           return;
         }
         const wantsMarkdown = globals().markdown === true && markdown !== undefined;
         const text = wantsMarkdown ? markdown(report) : render(report);
-        emit(deps, globals(), text, summarise(report));
+        print(text, summarise(report));
       });
   }
 
@@ -295,10 +305,10 @@ export function buildProgram(deps: CliDeps): Command {
     .command('strip <package> <valuation>')
     .description('where each step of a package has got to')
     .action(async (packageId: string, valuation: string) => {
-      const service = await serviceFor(deps, globals());
+      const service = await load();
       const map = stripFor(service, packageId, Number(valuation));
       const heading = `${map.packageId}, ${describePeriod(periodOf(service, Number(valuation)))}`;
-      emit(deps, globals(), `${heading}\n${renderStrip(map)}`, map.packageId);
+      print(`${heading}\n${renderStrip(map)}`, map.packageId);
     });
 
   valuationCommand(
@@ -373,17 +383,17 @@ export function buildProgram(deps: CliDeps): Command {
     .option('--chase', 'print only the inspections holding work up')
     .action(
       async (from: string, options: { weeks: string; gangs: string; chase?: boolean }) => {
-        const service = await serviceFor(deps, globals());
+        const service = await load();
         const plan = lookaheadFrom(service, parseSiteDate(from), {
           weeks: Number(options.weeks),
           gangs: Number(options.gangs),
         });
         if (options.chase === true) {
           const chase = chaseInspections(plan);
-          emit(deps, globals(), chase.join('\n'), chase);
+          print(chase.join('\n'), chase);
           return;
         }
-        emit(deps, globals(), renderLookahead(plan), plan.steps.length);
+        print(renderLookahead(plan), plan.steps.length);
       },
     );
 
@@ -392,15 +402,15 @@ export function buildProgram(deps: CliDeps): Command {
     .description('where the material has to go and what moving it costs')
     .option('--muck-away', 'print only what has to leave each source')
     .action(async (options: { muckAway?: boolean }) => {
-      const service = await serviceFor(deps, globals());
+      const service = await load();
       const plan = haulPlan(service);
       const sites = service.job.haulSites.all();
       if (options.muckAway === true) {
         const schedule = muckAwaySchedule(plan, sites);
-        emit(deps, globals(), schedule.join('\n'), schedule);
+        print(schedule.join('\n'), schedule);
         return;
       }
-      emit(deps, globals(), renderHaulPlan(plan, sites), plan.movements.length);
+      print(renderHaulPlan(plan, sites), plan.movements.length);
     });
 
   program
@@ -409,9 +419,9 @@ export function buildProgram(deps: CliDeps): Command {
     .option('-n, --periods <count>', 'how many periods', '12')
     .option('--late <periods>', 'periods the payer runs behind', '0')
     .action(async (options: { periods: string; late: string }) => {
-      const service = await serviceFor(deps, globals());
+      const service = await load();
       const points = cashFlowFor(service, Number(options.periods), Number(options.late));
-      emit(deps, globals(), renderCashFlow(points), points.length);
+      print(renderCashFlow(points), points.length);
     });
 
   program
@@ -419,9 +429,9 @@ export function buildProgram(deps: CliDeps): Command {
     .description('planned against earned, period by period')
     .option('-n, --periods <count>', 'how many periods', '12')
     .action(async (options: { periods: string }) => {
-      const service = await serviceFor(deps, globals());
+      const service = await load();
       const points = curveFor(service, Number(options.periods));
-      emit(deps, globals(), renderCurve(points), points.length);
+      print(renderCurve(points), points.length);
     });
 
   /**
@@ -432,7 +442,7 @@ export function buildProgram(deps: CliDeps): Command {
   function importCommand<T>(
     name: string,
     description: string,
-    load: (service: Service, text: string, options: { partial: boolean }) => ImportReport<T>,
+    apply: (service: Service, text: string, options: { partial: boolean }) => ImportReport<T>,
     what: string,
   ): void {
     program
@@ -440,8 +450,8 @@ export function buildProgram(deps: CliDeps): Command {
       .description(description)
       .option('--partial', 'take the rows that parsed even when others did not')
       .action(async (file: string, options: { partial?: boolean }) => {
-        const service = await serviceFor(deps, globals());
-        const report = load(service, await deps.readText(file), {
+        const service = await load();
+        const report = apply(service, await deps.readText(file), {
           partial: options.partial === true,
         });
         if (!hasErrors(report) || options.partial === true) {
@@ -449,7 +459,7 @@ export function buildProgram(deps: CliDeps): Command {
             await deps.saveJob(service.job, service.config.jobFile);
           }
         }
-        emit(deps, globals(), formatImportReport(report, what), importSummary(report));
+        print(formatImportReport(report, what), importSummary(report));
       });
   }
 
@@ -491,7 +501,7 @@ export function buildProgram(deps: CliDeps): Command {
     .command('export <valuation> <directory>')
     .description('write the valuation pack out as markdown')
     .action(async (valuation: string, directory: string) => {
-      const service = await serviceFor(deps, globals());
+      const service = await load();
       const number = Number(valuation);
       const written: string[] = [];
       const files: readonly [string, string][] = [
@@ -504,7 +514,7 @@ export function buildProgram(deps: CliDeps): Command {
         await deps.writeText(path, text);
         written.push(path);
       }
-      emit(deps, globals(), written.join('\n'), written);
+      print(written.join('\n'), written);
     });
 
   /**
@@ -543,10 +553,10 @@ export function buildProgram(deps: CliDeps): Command {
           known: Object.keys(CSV_TABLES).join(', '),
         });
       }
-      const service = await serviceFor(deps, globals());
+      const service = await load();
       const text = build(service, Number(valuation));
       await deps.writeText(file, text);
-      emit(deps, globals(), file, { file, rows: text.trimEnd().split('\n').length - 1 });
+      print(file, { file, rows: text.trimEnd().split('\n').length - 1 });
     });
 
   program
@@ -557,10 +567,10 @@ export function buildProgram(deps: CliDeps): Command {
       const entries = commandEntries(program);
       if (options.markdownTo !== undefined) {
         await deps.writeText(options.markdownTo, referenceMarkdown(program));
-        emit(deps, globals(), options.markdownTo, { file: options.markdownTo });
+        print(options.markdownTo, { file: options.markdownTo });
         return;
       }
-      emit(deps, globals(), referenceLines(program).join('\n'), entries);
+      print(referenceLines(program).join('\n'), entries);
     });
 
   program
@@ -568,14 +578,14 @@ export function buildProgram(deps: CliDeps): Command {
     .description('what each revision of the bill did to the one before it')
     .option('--rates', 'print only the rate movements')
     .action(async (options: { rates?: boolean }) => {
-      const service = await serviceFor(deps, globals());
+      const service = await load();
       const report = revisionsFor(service);
       if (options.rates === true) {
         const moves = rateChanges(report);
-        emit(deps, globals(), moves.join('\n'), moves);
+        print(moves.join('\n'), moves);
         return;
       }
-      emit(deps, globals(), renderRevisionReport(report), report.steps.length);
+      print(renderRevisionReport(report), report.steps.length);
     });
 
   program
@@ -583,7 +593,7 @@ export function buildProgram(deps: CliDeps): Command {
     .description('check the job for references that go nowhere')
     .option('--all', 'print the warnings as well as the errors')
     .action(async (options: { all?: boolean }) => {
-      const service = await serviceFor(deps, globals());
+      const service = await load();
       const diagnosis = diagnose(service.job);
       const shown =
         options.all === true
@@ -598,7 +608,7 @@ export function buildProgram(deps: CliDeps): Command {
         lines.length === 0
           ? `nothing wrong, ${String(diagnosis.warnings)} warnings not shown`
           : lines.join('\n');
-      emit(deps, globals(), text, diagnosis);
+      print(text, diagnosis);
       if (!isHealthy(diagnosis)) {
         throw new BadInputError('the job has errors', { errors: diagnosis.errors });
       }
@@ -608,9 +618,9 @@ export function buildProgram(deps: CliDeps): Command {
     .command('reconcile')
     .description('the packages against the bill')
     .action(async () => {
-      const service = await serviceFor(deps, globals());
+      const service = await load();
       const report = progressFor(service, 1);
-      emit(deps, globals(), renderReconciliation(report), report.reconciliation.length);
+      print(renderReconciliation(report), report.reconciliation.length);
     });
 
   return program;
