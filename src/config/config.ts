@@ -23,6 +23,24 @@ export const configSchema = z.object({
   autoSave: z.boolean(),
   /** Refuse to serve a valuation while the register does not reconcile. */
   strictReconciliation: z.boolean(),
+  /**
+   * What a report does when nobody says otherwise.
+   *
+   * Here rather than as literals in the command tree because these are the
+   * numbers a commercial team argues about once and then wants everywhere. A
+   * job run on a four week cycle wants a four week lookahead from every
+   * command, not from the ones somebody remembered to pass a flag to.
+   */
+  reports: z.object({
+    /** Periods a curve or a cash forecast runs to. */
+    periods: z.number().int().min(1).max(600),
+    /** Weeks a lookahead covers. */
+    lookaheadWeeks: z.number().int().min(1).max(52),
+    /** Gangs a lookahead assumes are available for each step. */
+    gangs: z.number().int().min(1).max(50),
+    /** Moving lines a final account prints before it stops. */
+    worstLines: z.number().int().min(1).max(500),
+  }),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -33,6 +51,7 @@ export const DEFAULT_CONFIG: Config = {
   logLevel: 'info',
   autoSave: true,
   strictReconciliation: false,
+  reports: { periods: 12, lookaheadWeeks: 4, gangs: 1, worstLines: 10 },
 };
 
 export function defaultConfig(): Config {
@@ -45,6 +64,12 @@ export type ConfigOverrides = {
   readonly logLevel?: LogLevel;
   readonly autoSave?: boolean;
   readonly strictReconciliation?: boolean;
+  readonly reports?: {
+    readonly periods?: number;
+    readonly lookaheadWeeks?: number;
+    readonly gangs?: number;
+    readonly worstLines?: number;
+  };
 };
 
 export function mergeConfig(base: Config, overrides: ConfigOverrides): Config {
@@ -57,6 +82,12 @@ export function mergeConfig(base: Config, overrides: ConfigOverrides): Config {
     logLevel: overrides.logLevel ?? base.logLevel,
     autoSave: overrides.autoSave ?? base.autoSave,
     strictReconciliation: overrides.strictReconciliation ?? base.strictReconciliation,
+    reports: {
+      periods: overrides.reports?.periods ?? base.reports.periods,
+      lookaheadWeeks: overrides.reports?.lookaheadWeeks ?? base.reports.lookaheadWeeks,
+      gangs: overrides.reports?.gangs ?? base.reports.gangs,
+      worstLines: overrides.reports?.worstLines ?? base.reports.worstLines,
+    },
   });
 }
 
@@ -85,6 +116,15 @@ function readFlag(raw: string | undefined, fallback: boolean, name: string): boo
   if (['1', 'true', 'yes', 'on'].includes(cleaned)) return true;
   if (['0', 'false', 'no', 'off'].includes(cleaned)) return false;
   throw new BadInputError(`${name} is not a yes or a no`, { value: raw });
+}
+
+function readCount(raw: string | undefined, fallback: number, name: string): number {
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new BadInputError(`${name} is not a whole number from one`, { value: raw });
+  }
+  return value;
 }
 
 function readPort(raw: string | undefined, fallback: number, name: string): number {
@@ -122,6 +162,24 @@ export function configFromEnv(
       base.strictReconciliation,
       `${ENV_PREFIX}STRICT`,
     ),
+    reports: {
+      periods: readCount(
+        env[`${ENV_PREFIX}PERIODS`],
+        base.reports.periods,
+        `${ENV_PREFIX}PERIODS`,
+      ),
+      lookaheadWeeks: readCount(
+        env[`${ENV_PREFIX}LOOKAHEAD_WEEKS`],
+        base.reports.lookaheadWeeks,
+        `${ENV_PREFIX}LOOKAHEAD_WEEKS`,
+      ),
+      gangs: readCount(env[`${ENV_PREFIX}GANGS`], base.reports.gangs, `${ENV_PREFIX}GANGS`),
+      worstLines: readCount(
+        env[`${ENV_PREFIX}WORST_LINES`],
+        base.reports.worstLines,
+        `${ENV_PREFIX}WORST_LINES`,
+      ),
+    },
   });
 }
 
@@ -132,6 +190,10 @@ export function describeConfig(config: Config): string {
     `log level           ${config.logLevel}`,
     `auto save           ${config.autoSave ? 'on' : 'off'}`,
     `strict reconcile    ${config.strictReconciliation ? 'on' : 'off'}`,
+    `periods             ${String(config.reports.periods)}`,
+    `lookahead weeks     ${String(config.reports.lookaheadWeeks)}`,
+    `gangs               ${String(config.reports.gangs)}`,
+    `worst lines         ${String(config.reports.worstLines)}`,
   ].join('\n');
 }
 

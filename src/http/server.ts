@@ -216,9 +216,10 @@ export function buildServer(service: Service): FastifyInstance {
 
   app.get('/schedule', (request) => {
     const query = request.query as Record<string, unknown>;
-    return scheduleOf(service, countQuery(query['periods'], 12, 'periods')).periods.map(
-      periodDto,
-    );
+    return scheduleOf(
+      service,
+      countQuery(query['periods'], service.config.reports.periods, 'periods'),
+    ).periods.map(periodDto);
   });
 
   app.get('/bill', (request) => {
@@ -347,8 +348,8 @@ export function buildServer(service: Service): FastifyInstance {
     const from = dateQuery(query['from'], scheduleOf(service, 1).periods[0]!.cutOff);
     return lookaheadDto(
       lookaheadFrom(service, from, {
-        weeks: countQuery(query['weeks'], 4, 'weeks'),
-        gangs: countQuery(query['gangs'], 1, 'gangs'),
+        weeks: countQuery(query['weeks'], service.config.reports.lookaheadWeeks, 'weeks'),
+        gangs: countQuery(query['gangs'], service.config.reports.gangs, 'gangs'),
       }),
     );
   });
@@ -384,7 +385,7 @@ export function buildServer(service: Service): FastifyInstance {
     return cashFlowDto(
       cashFlowFor(
         service,
-        countQuery(query['periods'], 12, 'periods'),
+        countQuery(query['periods'], service.config.reports.periods, 'periods'),
         fromZeroQuery(query['late'], 'late'),
       ),
     );
@@ -392,7 +393,12 @@ export function buildServer(service: Service): FastifyInstance {
 
   app.get('/curve', (request) => {
     const query = request.query as Record<string, unknown>;
-    return curveDto(curveFor(service, countQuery(query['periods'], 12, 'periods')));
+    return curveDto(
+      curveFor(
+        service,
+        countQuery(query['periods'], service.config.reports.periods, 'periods'),
+      ),
+    );
   });
 
   /**

@@ -113,6 +113,23 @@ async function serviceFor(deps: CliDeps, options: GlobalOptions): Promise<Servic
   return createService(await deps.loadJob(config.jobFile), config);
 }
 
+/**
+ * A count off a flag, or the configured default when the flag is absent.
+ *
+ * Commander can carry a default of its own, but that default would be a
+ * literal in the command tree and the configured one would never be reached.
+ * Leaving the flag undefined and falling back here is what lets the two live
+ * together.
+ */
+function countOf(raw: string | undefined, fallback: number): number {
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new BadInputError('that has to be a whole number from one', { value: raw });
+  }
+  return value;
+}
+
 function importSummary<T>(report: ImportReport<T>): Record<string, unknown> {
   return {
     rowsRead: report.rowsRead,
@@ -342,7 +359,7 @@ export function buildProgram(deps: CliDeps): Command {
     'outturn',
     'the anticipated final account at a valuation',
     outturnFor,
-    renderOutturn,
+    (outturn) => renderOutturn(outturn, configFor(deps, globals()).reports.worstLines),
     (outturn) => outturn.total.minor,
     'no such valuation',
   );
@@ -378,15 +395,15 @@ export function buildProgram(deps: CliDeps): Command {
   program
     .command('lookahead <from>')
     .description('what the next few weeks have to get through')
-    .option('-w, --weeks <count>', 'how many weeks', '4')
-    .option('-g, --gangs <count>', 'gangs available for each step', '1')
+    .option('-w, --weeks <count>', 'how many weeks, default from the config')
+    .option('-g, --gangs <count>', 'gangs for each step, default from the config')
     .option('--chase', 'print only the inspections holding work up')
     .action(
-      async (from: string, options: { weeks: string; gangs: string; chase?: boolean }) => {
+      async (from: string, options: { weeks?: string; gangs?: string; chase?: boolean }) => {
         const service = await load();
         const plan = lookaheadFrom(service, parseSiteDate(from), {
-          weeks: Number(options.weeks),
-          gangs: Number(options.gangs),
+          weeks: countOf(options.weeks, service.config.reports.lookaheadWeeks),
+          gangs: countOf(options.gangs, service.config.reports.gangs),
         });
         if (options.chase === true) {
           const chase = chaseInspections(plan);
@@ -416,21 +433,28 @@ export function buildProgram(deps: CliDeps): Command {
   program
     .command('cash')
     .description('what the certificates will bring in and when')
-    .option('-n, --periods <count>', 'how many periods', '12')
+    .option('-n, --periods <count>', 'how many periods, default from the config')
     .option('--late <periods>', 'periods the payer runs behind', '0')
-    .action(async (options: { periods: string; late: string }) => {
+    .action(async (options: { periods?: string; late: string }) => {
       const service = await load();
-      const points = cashFlowFor(service, Number(options.periods), Number(options.late));
+      const points = cashFlowFor(
+        service,
+        countOf(options.periods, service.config.reports.periods),
+        Number(options.late),
+      );
       print(renderCashFlow(points), points.length);
     });
 
   program
     .command('curve')
     .description('planned against earned, period by period')
-    .option('-n, --periods <count>', 'how many periods', '12')
-    .action(async (options: { periods: string }) => {
+    .option('-n, --periods <count>', 'how many periods, default from the config')
+    .action(async (options: { periods?: string }) => {
       const service = await load();
-      const points = curveFor(service, Number(options.periods));
+      const points = curveFor(
+        service,
+        countOf(options.periods, service.config.reports.periods),
+      );
       print(renderCurve(points), points.length);
     });
 

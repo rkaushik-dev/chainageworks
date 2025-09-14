@@ -163,6 +163,10 @@ describe('describeConfig', () => {
       'log level           info',
       'auto save           on',
       'strict reconcile    off',
+      'periods             12',
+      'lookahead weeks     4',
+      'gangs               1',
+      'worst lines         10',
     ]);
   });
 });
