@@ -10,6 +10,7 @@ import { formatRate } from '../domain/money/rate.js';
 import { billAsAt } from '../domain/bill/revision.js';
 import { parseSiteDate } from '../domain/time/siteDate.js';
 import { describeFinding, diagnose, isHealthy } from '../app/doctor.js';
+import { buildMonthEndPack, describePack, packIsSound } from '../app/monthEnd.js';
 import { commandEntries, referenceLines, referenceMarkdown } from './reference.js';
 import type { Service } from '../app/service.js';
 import {
@@ -610,6 +611,37 @@ export function buildProgram(deps: CliDeps): Command {
         return;
       }
       print(renderRevisionReport(report), report.steps.length);
+    });
+
+  /**
+   * The whole month in one command.
+   *
+   * Everything here can be run one report at a time, and on a normal month
+   * somebody does. This exists for the twenty fifth, when the same eleven
+   * files have to come out in the same order with nothing forgotten, and the
+   * person running it has other things to think about.
+   */
+  program
+    .command('month-end <valuation> <directory>')
+    .description('run the whole month end and write the pack out')
+    .action(async (valuation: string, directory: string) => {
+      const service = await load();
+      const pack = buildMonthEndPack(service, Number(valuation));
+      const written: string[] = [];
+      for (const file of pack.files) {
+        const path = `${directory}/${file.name}`;
+        await deps.writeText(path, file.text);
+        written.push(path);
+      }
+      const summary = [describePack(pack), ...written].join('\n');
+      print(summary, {
+        valuation: pack.valuation,
+        cutOff: pack.cutOff,
+        amountDue: pack.amountDue,
+        sound: packIsSound(pack),
+        errors: pack.diagnosis.errors,
+        files: written,
+      });
     });
 
   program
