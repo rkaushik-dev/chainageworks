@@ -81,6 +81,21 @@ public record SurveyRecord(
                 input.note() == null ? "" : input.note());
     }
 
+    public SurveyRecord withExtent(ChainageRange other) {
+        return new SurveyRecord(
+                id, packageId, code, stepId, other, quantity, measuredOn, bookedBy, method, supersedes, note);
+    }
+
+    public SurveyRecord withQuantity(Quantity other) {
+        return new SurveyRecord(
+                id, packageId, code, stepId, extent, other, measuredOn, bookedBy, method, supersedes, note);
+    }
+
+    public SurveyRecord withPackage(String other) {
+        return new SurveyRecord(
+                id, other, code, stepId, extent, quantity, measuredOn, bookedBy, method, supersedes, note);
+    }
+
     public boolean isRemeasure() {
         return supersedes.isPresent();
     }
