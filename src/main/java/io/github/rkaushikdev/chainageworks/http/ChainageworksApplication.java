@@ -4,6 +4,8 @@ import io.github.rkaushikdev.chainageworks.app.Service;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.bridge.SLF4JBridgeHandler;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -14,6 +16,7 @@ import org.springframework.boot.web.context.WebServerApplicationContext;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -53,17 +56,12 @@ public class ChainageworksApplication implements WebMvcConfigurer {
                 .filter(listener -> !(listener instanceof LoggingApplicationListener))
                 .toList();
         application.setListeners(listeners);
-        application.setDefaultProperties(Map.of(
-                "server.address",
-                service.config().http().host(),
-                "server.port",
-                service.config().http().port(),
-                "spring.main.banner-mode",
-                "off",
-                "spring.main.log-startup-info",
-                false,
-                "spring.web.resources.add-mappings",
-                false));
+        application.setDefaultProperties(Map.ofEntries(
+                Map.entry("server.address", service.config().http().host()),
+                Map.entry("server.port", service.config().http().port()),
+                Map.entry("spring.main.banner-mode", "off"),
+                Map.entry("spring.main.log-startup-info", false),
+                Map.entry("spring.web.resources.add-mappings", false)));
         return application.run(args);
     }
 
@@ -73,6 +71,32 @@ public class ChainageworksApplication implements WebMvcConfigurer {
             return web.getWebServer().getPort();
         }
         throw new IllegalArgumentException("that application is not serving anything");
+    }
+
+    /**
+     * Block until {@code context} is closed, by {@link ConfigurableApplicationContext#close} from another
+     * thread or by the process being stopped: Boot closes the context on {@code SIGINT} and {@code
+     * SIGTERM}, letting the requests in flight finish first.
+     *
+     * @throws InterruptedException when the waiting thread is interrupted, after closing the context
+     */
+    public static void awaitClose(ConfigurableApplicationContext context) throws InterruptedException {
+        CountDownLatch closed = new CountDownLatch(1);
+        context.addApplicationListener(event -> {
+            if (event instanceof ContextClosedEvent) {
+                closed.countDown();
+            }
+        });
+        try {
+            while (context.isActive()) {
+                if (closed.await(1, TimeUnit.SECONDS)) {
+                    return;
+                }
+            }
+        } catch (InterruptedException interrupted) {
+            context.close();
+            throw interrupted;
+        }
     }
 
     @Override

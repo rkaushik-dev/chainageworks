@@ -20,7 +20,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * The HTTP API over one service, answered in process with no socket, for the suites that drive it.
  *
  * <p>Built from the same parts {@link ChainageworksApplication} scans: the routes, the problem bodies,
- * the request ids, the route guard and the writer every body goes through. A URL is sent exactly as
+ * the request ids, the job lock, the route guard and the writer every body goes through. A URL is sent exactly as
  * written, query and percent escapes included.
  */
 public final class ApiClient {
@@ -38,7 +38,7 @@ public final class ApiClient {
                 .setControllerAdvice(new ApiErrors())
                 .setMessageConverters(new JsonTreeConverter())
                 .addInterceptors(new RouteGuard())
-                .addFilters(new RequestIds())
+                .addFilters(new RequestIds(), new JobLock())
                 .build());
     }
 

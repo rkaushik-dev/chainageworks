@@ -10,6 +10,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -94,6 +96,35 @@ class ChainageworksApplicationTest {
         assertThat(served.body()).contains("\"/health\"");
         assertThat(served.body())
                 .isEqualTo(ApiClient.over(service).get("/routes").body());
+    }
+
+    @Test
+    void waitsUntilItIsClosedAndClosesWhenTheWaitIsInterrupted() throws Exception {
+        ConfigurableApplicationContext closedElsewhere = ChainageworksApplication.run(service, "--server.port=0");
+        Thread waiting = Thread.ofPlatform().start(() -> {
+            try {
+                ChainageworksApplication.awaitClose(closedElsewhere);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        closedElsewhere.close();
+        waiting.join(TimeUnit.SECONDS.toMillis(10));
+        assertThat(waiting.isAlive()).isFalse();
+
+        ConfigurableApplicationContext interruptedWait = ChainageworksApplication.run(service, "--server.port=0");
+        AtomicBoolean sawTheInterrupt = new AtomicBoolean();
+        Thread stopped = Thread.ofPlatform().start(() -> {
+            try {
+                ChainageworksApplication.awaitClose(interruptedWait);
+            } catch (InterruptedException interrupted) {
+                sawTheInterrupt.set(true);
+            }
+        });
+        stopped.interrupt();
+        stopped.join(TimeUnit.SECONDS.toMillis(10));
+        assertThat(sawTheInterrupt).isTrue();
+        assertThat(interruptedWait.isActive()).isFalse();
     }
 
     @Test

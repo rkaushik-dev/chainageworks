@@ -76,6 +76,22 @@ class RoutesTest {
         }
     }
 
+    static Stream<String> everyImportRoute() {
+        return pathsAnswering("POST").stream();
+    }
+
+    @Nested
+    class TheImports {
+
+        @ParameterizedTest(name = "POST {0}")
+        @MethodSource("io.github.rkaushikdev.chainageworks.http.RoutesTest#everyImportRoute")
+        void readsASheetWithNoRowsOnEveryImportRouteItLists(String path) {
+            Answer answer = ApiClient.over(sampleJob()).postCsv(path, "");
+            assertThat(answer.status()).isIn(200, 207);
+            assertThat(answer.json().get("rowsRead").intValue()).isZero();
+        }
+    }
+
     @Nested
     class Refusals {
 
