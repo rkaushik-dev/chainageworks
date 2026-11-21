@@ -33,7 +33,8 @@ public final class ApiClient {
 
     /** The API over {@code service}. */
     public static ApiClient over(Service service) {
-        return new ApiClient(MockMvcBuilders.standaloneSetup(new JobRoutes(service))
+        return new ApiClient(MockMvcBuilders.standaloneSetup(
+                        new JobRoutes(service), new ReportRoutes(service), new ImportRoutes(service))
                 .setControllerAdvice(new ApiErrors())
                 .setMessageConverters(new JsonTreeConverter())
                 .addInterceptors(new RouteGuard())
