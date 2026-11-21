@@ -410,6 +410,15 @@ public final class Service {
     }
 
     /**
+     * The lookahead from {@code from} over {@code weeks} weeks, with one gang to a step.
+     *
+     * @throws BadInputException for fewer than one week
+     */
+    public Lookahead lookaheadFrom(LocalDate from, int weeks) {
+        return Lookahead.build(lookaheadInput(from).withWeeks(weeks));
+    }
+
+    /**
      * The lookahead from a date, which is deliberately not a valuation number.
      *
      * <p>A valuation is a backward looking thing measured to a cut-off, and a lookahead is a forward
