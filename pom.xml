@@ -24,6 +24,9 @@
         <spotless.version>2.44.5</spotless.version>
         <coverage.minimum>0.80</coverage.minimum>
         <main.class>io.github.rkaushikdev.chainageworks.cli.Cw</main.class>
+        <!-- The timing suite is tagged "performance" and runs only in the perf profile. -->
+        <test.groups></test.groups>
+        <test.excludedGroups>performance</test.excludedGroups>
     </properties>
 
     <dependencies>
@@ -70,6 +73,8 @@
                     <forkCount>1</forkCount>
                     <reuseForks>true</reuseForks>
                     <trimStackTrace>false</trimStackTrace>
+                    <groups>${test.groups}</groups>
+                    <excludedGroups>${test.excludedGroups}</excludedGroups>
                 </configuration>
             </plugin>
 
@@ -145,4 +150,20 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            ./mvnw -B verify -Pperf runs the timing suite and nothing else. Its limits are loose on
+            purpose, but timing on a shared runner is still noise the default build must not carry.
+            Coverage is not measured: one suite cannot meet the gate, and the agent skews the timings.
+        -->
+        <profile>
+            <id>perf</id>
+            <properties>
+                <test.groups>performance</test.groups>
+                <test.excludedGroups></test.excludedGroups>
+                <jacoco.skip>true</jacoco.skip>
+            </properties>
+        </profile>
+    </profiles>
 </project>
