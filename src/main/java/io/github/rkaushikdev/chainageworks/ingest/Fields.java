@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
  * <p>Every failure carries the line and the column, so the catch can turn it straight into an
  * import issue that names where to look.
  */
-public final class Fields {
+final class Fields {
 
     private static final Pattern SEPARATORS = Patterns.compile("[\\s-]+");
     private static final List<String> YES = List.of("y", "yes", "true", "1");

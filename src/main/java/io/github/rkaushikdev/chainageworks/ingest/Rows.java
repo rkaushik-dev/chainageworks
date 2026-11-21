@@ -19,7 +19,7 @@ import java.util.function.Function;
  * differently depending on which register it was going into. These two loops are the one place the
  * rules live.
  */
-public final class Rows {
+final class Rows {
 
     private Rows() {}
 

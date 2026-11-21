@@ -19,7 +19,7 @@ import org.springframework.context.ConfigurableApplicationContext;
  * command reads. Every argument goes to the server untouched, so {@code --server.port=0} listens on
  * any free port.
  */
-public final class Serve {
+final class Serve {
 
     /** The word that starts the server rather than running a command: {@code cw serve}. */
     public static final String COMMAND = "serve";

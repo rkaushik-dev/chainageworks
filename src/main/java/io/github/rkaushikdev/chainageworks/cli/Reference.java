@@ -25,7 +25,7 @@ import picocli.CommandLine.Model.PositionalParamSpec;
  * would put the export commands first and the import commands in the middle, which teaches the reader
  * nothing.
  */
-public final class Reference {
+final class Reference {
 
     private Reference() {}
 

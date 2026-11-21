@@ -19,7 +19,7 @@ import java.util.Objects;
  * @param message what went wrong, for a person
  * @param details what was wrong, by name
  */
-public record Problem(ErrorCode code, String message, Map<String, Object> details) {
+record Problem(ErrorCode code, String message, Map<String, Object> details) {
 
     public Problem {
         Objects.requireNonNull(code, "code");
