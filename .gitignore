@@ -8,13 +8,9 @@ out/
 
 # Local working trees
 .worktrees/
+.wt/
 
-# Until the superseded sources go
-node_modules/
-dist/
-coverage/
+# Local files
 *.log
 .DS_Store
 .env
-.vitest-cache/
-tmp/
