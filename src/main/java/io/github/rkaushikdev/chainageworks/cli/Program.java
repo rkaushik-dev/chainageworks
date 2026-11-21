@@ -71,9 +71,14 @@ public final class Program {
             return 1;
         } catch (IOException | RuntimeException failure) {
             CwException problem = CwException.from(failure);
-            deps.err(problem.code().wire() + ": " + problem.getMessage());
+            deps.err(complaint(problem));
             return problem.code() == ErrorCode.INTERNAL ? 2 : 1;
         }
+    }
+
+    /** A refusal as the error stream prints it: {@code bad_input: no job file at that path}. */
+    static String complaint(CwException problem) {
+        return problem.code().wire() + ": " + problem.getMessage();
     }
 
     private int dispatch(ParseResult parsed) throws IOException {
