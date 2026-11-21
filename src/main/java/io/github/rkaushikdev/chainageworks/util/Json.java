@@ -52,7 +52,7 @@ public final class Json {
     }
 
     /**
-     * A number node holding {@code value}: a whole number becomes an integer node, so it is written
+     * A number value holding {@code value}: a whole number becomes an integer value, so it is written
      * and compared as one.
      */
     public static JsonNode number(double value) {
@@ -64,14 +64,14 @@ public final class Json {
 
     /**
      * The tree for a plain Java value: maps become objects, iterables arrays, numbers, strings and
-     * booleans themselves, {@code null} a JSON null, an empty {@code Optional} a missing node.
+     * booleans themselves, {@code null} a JSON null, an empty {@code Optional} a missing value.
      */
     public static JsonNode valueOf(Object value) {
         if (value == null) {
             return NODES.nullNode();
         }
-        if (value instanceof JsonNode node) {
-            return node;
+        if (value instanceof JsonNode tree) {
+            return tree;
         }
         if (value instanceof String text) {
             return NODES.textNode(text);

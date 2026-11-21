@@ -86,7 +86,7 @@ public record Alignment(String id, String name, long start, long end, List<Chain
     /**
      * One continuous run of stationing, with where it begins on the ground.
      *
-     * @param series zero based series number; series 0 is the original stationing
+     * @param series zero based series number; series 0 is the stationing before the first equation
      * @param from its first station
      * @param to its last station
      * @param startDistance millimetres along the ground from the start of the alignment
