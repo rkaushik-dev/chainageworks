@@ -115,7 +115,7 @@ public final class Program {
 
     /**
      * The tree, with the commands in the order the help and the reference list them: the job, the
-     * reports on a valuation, the plans, then the checks.
+     * reports on a valuation, the plans, the imports, then the exports and the checks run with them.
      */
     private static CommandSpec buildTree() {
         CommandSpec root = CommandSpec.create().name(NAME);
@@ -127,7 +127,15 @@ public final class Program {
                 List.of(JobCommands.status(), JobCommands.config(), JobCommands.bill(), JobCommands.packages()));
         commands.addAll(ValuationCommands.all());
         commands.addAll(PlanCommands.all());
-        commands.addAll(List.of(JobCommands.revisions(), JobCommands.doctor(), JobCommands.reconcile()));
+        commands.addAll(ImportCommands.all());
+        commands.addAll(List.of(
+                ExportCommands.export(),
+                ExportCommands.csv(),
+                JobCommands.commands(),
+                JobCommands.revisions(),
+                ExportCommands.monthEnd(),
+                JobCommands.doctor(),
+                JobCommands.reconcile()));
         for (CommandSpec command : commands) {
             globals(true).forEach(command::addOption);
             root.addSubcommand(command.name(), command);

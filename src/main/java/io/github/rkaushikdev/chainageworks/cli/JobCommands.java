@@ -20,6 +20,7 @@ import io.github.rkaushikdev.chainageworks.reporting.format.PlainText;
 import io.github.rkaushikdev.chainageworks.reporting.format.Table;
 import io.github.rkaushikdev.chainageworks.store.Job;
 import io.github.rkaushikdev.chainageworks.util.Json;
+import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +32,7 @@ import picocli.CommandLine.Model.CommandSpec;
 final class JobCommands {
 
     private static final String AS_AT = "--as-at";
+    private static final String MARKDOWN_TO = "--markdown-to";
     private static final String RATES = "--rates";
     private static final String ALL = "--all";
 
@@ -126,6 +128,31 @@ final class JobCommands {
                                 Integer.toString(pkg.allocations().size())))
                         .toList());
         call.print(text, job.packages().count());
+    }
+
+    static CommandSpec commands() {
+        return Declare.command(
+                "commands",
+                "the command reference, read off the command tree itself",
+                JobCommands::commands,
+                Declare.option("--markdown-to <file>", "write the reference out as markdown"));
+    }
+
+    private static void commands(Invocation call) throws IOException {
+        Optional<String> markdownTo = call.option(MARKDOWN_TO);
+        if (markdownTo.isPresent()) {
+            String file = markdownTo.get();
+            call.deps().writeText(file, Reference.markdown(call.tree()));
+            ObjectNode written = Json.object();
+            written.put("file", file);
+            call.print(file, written);
+            return;
+        }
+        List<Reference.CommandEntry> entries = Reference.commandEntries(call.tree());
+        call.print(
+                String.join("\n", Reference.lines(call.tree())),
+                Json.valueOf(
+                        entries.stream().map(Reference.CommandEntry::toJson).toList()));
     }
 
     static CommandSpec revisions() {
