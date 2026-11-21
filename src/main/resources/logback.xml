@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Warnings and worse go to stderr, so a command's own output on stdout stays clean. -->
+<configuration>
+    <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.err</target>
+        <encoder>
+            <pattern>%d{HH:mm:ss} %-5level %logger{36} %msg%n</pattern>
+        </encoder>
+    </appender>
+    <!-- A request for a path no route serves is answered with a 404; it is not a warning about the server. -->
+    <logger name="org.springframework.web.servlet.PageNotFound" level="ERROR"/>
+    <root level="WARN">
+        <appender-ref ref="console"/>
+    </root>
+</configuration>

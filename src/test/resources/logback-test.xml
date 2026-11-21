@@ -7,6 +7,8 @@
             <pattern>%d{HH:mm:ss} %-5level %logger{36} %msg%n</pattern>
         </encoder>
     </appender>
+    <!-- A request for a path no route serves is answered with a 404; it is not a warning about the server. -->
+    <logger name="org.springframework.web.servlet.PageNotFound" level="ERROR"/>
     <root level="WARN">
         <appender-ref ref="console"/>
     </root>
