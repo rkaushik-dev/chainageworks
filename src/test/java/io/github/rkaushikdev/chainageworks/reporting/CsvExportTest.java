@@ -2,9 +2,10 @@ package io.github.rkaushikdev.chainageworks.reporting;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.rkaushikdev.chainageworks.app.Service;
+import io.github.rkaushikdev.chainageworks.config.Config;
 import io.github.rkaushikdev.chainageworks.store.Job;
 import io.github.rkaushikdev.chainageworks.support.JobFixtures;
-import io.github.rkaushikdev.chainageworks.support.JobValuations;
 import io.github.rkaushikdev.chainageworks.valuation.Certificate;
 import io.github.rkaushikdev.chainageworks.valuation.Outturn;
 import java.time.LocalDate;
@@ -14,8 +15,9 @@ import org.junit.jupiter.api.Test;
 class CsvExportTest {
 
     private static final Job JOB = JobFixtures.commercialJob();
-    private static final Certificate CERTIFICATE = JobValuations.certificate(JOB, 3);
-    private static final Outturn OUTTURN = JobValuations.outturn(JOB, 3);
+    private static final Service SERVICE = new Service(JOB, Config.DEFAULT);
+    private static final Certificate CERTIFICATE = SERVICE.certificateFor(3);
+    private static final Outturn OUTTURN = SERVICE.outturnFor(3);
     private static final LocalDate CUT_OFF = CERTIFICATE.period().cutOff();
 
     /** The lines of a file, each ended by a newline. */

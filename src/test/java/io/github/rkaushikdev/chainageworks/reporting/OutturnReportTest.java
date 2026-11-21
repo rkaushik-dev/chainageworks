@@ -2,10 +2,10 @@ package io.github.rkaushikdev.chainageworks.reporting;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.rkaushikdev.chainageworks.app.Service;
+import io.github.rkaushikdev.chainageworks.config.Config;
 import io.github.rkaushikdev.chainageworks.domain.money.Percent;
-import io.github.rkaushikdev.chainageworks.store.Job;
 import io.github.rkaushikdev.chainageworks.support.JobFixtures;
-import io.github.rkaushikdev.chainageworks.support.JobValuations;
 import io.github.rkaushikdev.chainageworks.util.Text;
 import io.github.rkaushikdev.chainageworks.valuation.Outturn;
 import java.util.ArrayList;
@@ -15,12 +15,11 @@ import org.junit.jupiter.api.Test;
 /** The final account page pinned for the commercial job at valuation 3, cut off on 2025-03-25. */
 class OutturnReportTest {
 
-    private static final Job JOB = JobFixtures.commercialJob();
+    private static final Service SERVICE = new Service(JobFixtures.commercialJob(), Config.DEFAULT);
 
     /** The same job with every item forecast on its trend from ten percent complete. */
-    private static final Outturn TRENDING = Outturn.build(
-            JobValuations.outturnInput(JOB, JobValuations.period(JOB, 3).cutOff())
-                    .withTrendThreshold(Percent.of(10)));
+    private static final Outturn TRENDING =
+            Outturn.build(SERVICE.outturnInputFor(3).withTrendThreshold(Percent.of(10)));
 
     private static final List<String> HEAD = List.of(
             "anticipated final account at 2025-03-25",
@@ -50,7 +49,7 @@ class OutturnReportTest {
 
     @Test
     void setsThePartsOutThenThePositionWhenNothingHasMoved() {
-        assertThat(OutturnReport.render(JobValuations.outturn(JOB, 3)))
+        assertThat(OutturnReport.render(SERVICE.outturnFor(3)))
                 .isEqualTo(String.join(
                         "\n",
                         "anticipated final account at 2025-03-25",

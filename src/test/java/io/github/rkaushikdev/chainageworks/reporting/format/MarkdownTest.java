@@ -2,8 +2,10 @@ package io.github.rkaushikdev.chainageworks.reporting.format;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.rkaushikdev.chainageworks.app.Service;
+import io.github.rkaushikdev.chainageworks.config.Config;
+import io.github.rkaushikdev.chainageworks.store.Job;
 import io.github.rkaushikdev.chainageworks.support.JobFixtures;
-import io.github.rkaushikdev.chainageworks.support.JobValuations;
 import io.github.rkaushikdev.chainageworks.util.Text;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +16,10 @@ class MarkdownTest {
 
     private static List<String> lines(String text) {
         return Text.split(text, "\n");
+    }
+
+    private static Service service(Job job) {
+        return new Service(job, Config.DEFAULT);
     }
 
     @Nested
@@ -74,7 +80,8 @@ class MarkdownTest {
 
         @Test
         void opensWithTheCertificateNumberAndTheDates() {
-            String text = Markdown.certificate(JobValuations.certificate(JobFixtures.commercialJob(), 3));
+            String text =
+                    Markdown.certificate(service(JobFixtures.commercialJob()).certificateFor(3));
             assertThat(lines(text).get(0)).isEqualTo("# Payment certificate 3");
             assertThat(text).contains("- **Valuation to**: 2025-03-25");
             assertThat(text).contains("- **Bill revision**: Rev A");
@@ -82,19 +89,21 @@ class MarkdownTest {
 
         @Test
         void boldsTheAmountDue() {
-            String text = Markdown.certificate(JobValuations.certificate(JobFixtures.commercialJob(), 3));
+            String text =
+                    Markdown.certificate(service(JobFixtures.commercialJob()).certificateFor(3));
             assertThat(text).contains("| **Amount due this certificate** |");
         }
 
         @Test
         void leavesTheAdjustmentRowOutOnAFixedPriceContract() {
-            assertThat(Markdown.certificate(JobValuations.certificate(JobFixtures.commercialJob(), 3)))
+            assertThat(Markdown.certificate(service(JobFixtures.commercialJob()).certificateFor(3)))
                     .doesNotContain("Price adjustment");
         }
 
         @Test
         void addsTheAdjustmentRowAndTheWarningWhenThereIsAClause() {
-            String text = Markdown.certificate(JobValuations.certificate(JobFixtures.fluctuatingJob(), 3));
+            String text =
+                    Markdown.certificate(service(JobFixtures.fluctuatingJob()).certificateFor(3));
             assertThat(text).contains("| Price adjustment at 12.750% |");
             assertThat(text).contains("> The price adjustment rests on a provisional index figure.");
         }
@@ -105,7 +114,7 @@ class MarkdownTest {
 
         @Test
         void opensWithTheCutOffAndTablesThePackages() {
-            String text = Markdown.progress(JobValuations.progress(JobFixtures.commercialJob(), 3));
+            String text = Markdown.progress(service(JobFixtures.commercialJob()).progressFor(3));
             assertThat(lines(text).get(0)).isEqualTo("# Progress at 2025-03-25");
             assertThat(text).contains("## Packages");
             assertThat(text).contains("| WP-01 |");
@@ -113,7 +122,7 @@ class MarkdownTest {
 
         @Test
         void givesOneRowForEveryPackage() {
-            String text = Markdown.progress(JobValuations.progress(JobFixtures.commercialJob(), 3));
+            String text = Markdown.progress(service(JobFixtures.commercialJob()).progressFor(3));
             List<String> rows = lines(text).stream()
                     .filter(line -> line.startsWith("| WP-"))
                     .toList();
@@ -126,7 +135,8 @@ class MarkdownTest {
 
         @Test
         void tablesTheOrdersAndTheNoticeDiary() {
-            String text = Markdown.subcontract(JobValuations.payments(JobFixtures.commercialJob(), 3));
+            String text =
+                    Markdown.subcontract(service(JobFixtures.commercialJob()).paymentsFor(3));
             assertThat(lines(text).get(0)).isEqualTo("# Subcontract payments at 2025-03-25");
             assertThat(text).contains("## Notice diary");
             assertThat(text).contains("| SA-01 | Dowsett Plant Hire |");
@@ -135,7 +145,7 @@ class MarkdownTest {
 
         @Test
         void leavesBothTablesOutOnAJobWithNoOrders() {
-            String text = Markdown.subcontract(JobValuations.payments(JobFixtures.sampleJob(), 3));
+            String text = Markdown.subcontract(service(JobFixtures.sampleJob()).paymentsFor(3));
             assertThat(text).doesNotContain("## Notice diary");
             assertThat(text).contains("- **Orders**: 0");
         }
