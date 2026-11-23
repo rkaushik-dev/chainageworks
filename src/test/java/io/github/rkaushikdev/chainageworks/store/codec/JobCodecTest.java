@@ -323,6 +323,27 @@ class JobCodecTest {
         }
 
         @Test
+        void keepsAProRataRateAsTheItemItIsBuiltFrom() {
+            Job job = sampleJob();
+            job.variations()
+                    .add(Variation.build(VariationInput.of(
+                                    "VO-020",
+                                    "EI-050",
+                                    "excavation in rock",
+                                    List.of(VariationItem.proRata(
+                                            ItemCode.parse("E424.1"),
+                                            Quantity.of(200, Unit.M3),
+                                            ItemCode.parse("E423.1"),
+                                            2.5)))
+                            .withStatus(VariationStatus.INSTRUCTED)
+                            .withInstructedOn(d("2025-03-14"))));
+            VariationItem again =
+                    through(job).variations().require("VO-020").items().get(0);
+            assertThat(again.proRata()).contains(new VariationItem.ProRata(ItemCode.parse("E423.1"), 2.5));
+            assertThat(again.rate()).isEmpty();
+        }
+
+        @Test
         void refusesADocumentFromAnotherVersion() {
             ObjectNode doc = JobCodec.toJson(sampleJob());
             doc.put("version", 99);

@@ -8,6 +8,7 @@ import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.dateFro
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.dateToJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.listFromJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.listToJson;
+import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.looseNumber;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.moneyFromJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.moneyToJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.needString;
@@ -425,6 +426,11 @@ final class WorksCodec {
             entry.set("quantityChange", quantityToJson(item.quantityChange()));
             entry.set("rate", rateToJson(item.rate()));
             entry.put("basis", item.basis().wire());
+            item.proRata().ifPresent(source -> {
+                ObjectNode proRata = entry.putObject("proRata");
+                proRata.put("from", codeToJson(source.from()));
+                proRata.set("factor", Json.number(source.factor()));
+            });
             return entry;
         }));
         return json;
@@ -448,7 +454,12 @@ final class WorksCodec {
                     code,
                     quantityFromJson(item.path("quantityChange")),
                     optional(item.path("rate"), ValueCodec::rateFromJson),
-                    known(item.path("basis"), "valuation basis", ValuationBasis::fromWire));
+                    known(item.path("basis"), "valuation basis", ValuationBasis::fromWire),
+                    optional(item.path("proRata"), source -> {
+                        JsonNode proRata = objectFromJson(source, "pro rata rate");
+                        return new VariationItem.ProRata(
+                                codeFromJson(proRata.path("from")), looseNumber(proRata.path("factor")));
+                    }));
         });
         return Variation.build(new VariationInput(id, reference, title, status, instructedOn, agreedOn, items, extent));
     }

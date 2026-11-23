@@ -8,6 +8,7 @@ import io.github.rkaushikdev.chainageworks.NotFoundException;
 import io.github.rkaushikdev.chainageworks.domain.bill.Bill;
 import io.github.rkaushikdev.chainageworks.domain.bill.BillDiff;
 import io.github.rkaushikdev.chainageworks.domain.bill.BillItem;
+import io.github.rkaushikdev.chainageworks.domain.bill.BillItemInput;
 import io.github.rkaushikdev.chainageworks.domain.bill.BillItemKind;
 import io.github.rkaushikdev.chainageworks.domain.bill.ItemCode;
 import io.github.rkaushikdev.chainageworks.domain.money.Currency;
@@ -54,6 +55,85 @@ class VariationApplicationTest {
 
     private static List<BillDiff.ChangeKind> kinds(VariationApplication applied) {
         return applied.changes().stream().map(BillDiff.Change::kind).toList();
+    }
+
+    @Nested
+    class ApplyingAProRataRate {
+
+        private final Variation rock =
+                variation("VO-020", VariationItem.proRata(c("E424.1"), Quantity.of(200, Unit.M3), c("E423.1"), 2.5));
+
+        @Test
+        void buildsTheNewItemsRateFromTheSourceItemTimesTheFactor() {
+            BillItem item = VariationApplication.apply(BILL, List.of(rock), AS_AT)
+                    .bill()
+                    .require(c("E424.1"));
+            assertThat(item.rate()).isEqualTo(BILL.require(c("E423.1")).rate().scale(2.5));
+            assertThat(item.kind()).isEqualTo(BillItemKind.STAR);
+            assertThat(VariationApplication.value(BILL, List.of(rock), AS_AT).major())
+                    .isEqualTo(2425);
+        }
+
+        @Test
+        void followsTheSourceRateWhenTheBillIsRevised() {
+            BillItem source = BILL.require(c("E423.1"));
+            Bill revised = BILL.withItem(BillItem.build(new BillItemInput(
+                    source.code(),
+                    source.description(),
+                    Rate.of(5.2, Currency.GBP, Unit.M3),
+                    source.quantity(),
+                    source.kind(),
+                    source.chainage())));
+            assertThat(VariationApplication.value(revised, List.of(rock), AS_AT).major())
+                    .isEqualTo(2600);
+        }
+
+        @Test
+        void refusesARateBuiltFromAnItemMeasuredInAnotherUnit() {
+            String linear = BILL.items().stream()
+                    .filter(item -> item.unit() != Unit.M3 && item.unit().isMeasurable())
+                    .findFirst()
+                    .orElseThrow()
+                    .code()
+                    .format();
+            Variation wrong =
+                    variation("VO-021", VariationItem.proRata(c("E424.1"), Quantity.of(10, Unit.M3), c(linear), 1.1));
+            assertThatThrownBy(() -> VariationApplication.apply(BILL, List.of(wrong), AS_AT))
+                    .hasMessageContaining("another unit");
+        }
+
+        @Test
+        void refusesARateBuiltFromAnItemTheBillDoesNotCarry() {
+            Variation stray =
+                    variation("VO-022", VariationItem.proRata(c("E424.1"), Quantity.of(10, Unit.M3), c("E999.9"), 1.1));
+            assertThatThrownBy(() -> VariationApplication.apply(BILL, List.of(stray), AS_AT))
+                    .hasMessageContaining("E999.9");
+        }
+    }
+
+    @Nested
+    class BuildingAProRataItem {
+
+        @Test
+        void refusesASourceOnAnItemThatIsNotProRata() {
+            VariationItem star = VariationItem.proRata(c("E424.1"), Quantity.of(1, Unit.M3), c("E423.1"), 1.2)
+                    .withBasis(ValuationBasis.STAR_RATE);
+            assertThatThrownBy(() -> variation("VO-030", star)).hasMessageContaining("only a pro rata item");
+        }
+
+        @Test
+        void refusesBothARateAndASource() {
+            VariationItem both = VariationItem.proRata(c("E424.1"), Quantity.of(1, Unit.M3), c("E423.1"), 1.2)
+                    .withRate(Rate.of(10, Currency.GBP, Unit.M3));
+            assertThatThrownBy(() -> variation("VO-031", both)).hasMessageContaining("not both");
+        }
+
+        @Test
+        void refusesAFactorOfNothing() {
+            assertThatThrownBy(() -> variation(
+                            "VO-032", VariationItem.proRata(c("E424.1"), Quantity.of(1, Unit.M3), c("E423.1"), 0)))
+                    .hasMessageContaining("more than nothing");
+        }
     }
 
     @Nested

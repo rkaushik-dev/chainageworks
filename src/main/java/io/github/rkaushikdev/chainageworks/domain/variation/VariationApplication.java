@@ -66,10 +66,19 @@ public record VariationApplication(Bill bill, List<String> applied, List<BillDif
                     () -> new NotFoundException("bill item", change.code().format()));
             return bill.withItem(requantified(item, change));
         }
-        if (existing.isEmpty()) {
-            return bill.withItem(createdFrom(variation, change));
+        // A pro rata rate is read off the bill being varied, so each revision of the source rate
+        // reaches the variation priced at it rather than at the rate in force when it was agreed.
+        Optional<Rate> rate = change.rateIn(bill);
+        if (rate.isPresent() && rate.get().unit() != change.quantityChange().unit()) {
+            throw new ConflictException(
+                    "a pro rata rate is built from an item measured in another unit",
+                    Details.of(
+                            "variation", variation.id(), "code", change.code().format()));
         }
-        return bill.withItem(repriced(existing.get(), change));
+        if (existing.isEmpty()) {
+            return bill.withItem(createdFrom(variation, change, rate));
+        }
+        return bill.withItem(repriced(existing.get(), change, rate));
     }
 
     /** Instructing a provisional item is what makes it earnable. */
@@ -97,22 +106,17 @@ public record VariationApplication(Bill bill, List<String> applied, List<BillDif
                 item.chainage()));
     }
 
-    private static BillItem repriced(BillItem item, VariationItem change) {
-        Rate rate = change.rate().orElse(item.rate());
+    private static BillItem repriced(BillItem item, VariationItem change, Optional<Rate> priced) {
+        Rate rate = priced.orElse(item.rate());
         BillItemKind kind = nextKind(item.kind() == BillItemKind.MEASURED ? BillItemKind.STAR : item.kind());
         return BillItem.build(
                 new BillItemInput(item.code(), item.description(), rate, moved(item, change), kind, item.chainage()));
     }
 
-    private static BillItem createdFrom(Variation variation, VariationItem change) {
-        Rate rate = change.rate()
-                .orElseThrow(() -> new ConflictException(
-                        "a new variation item needs a rate",
-                        Details.of(
-                                "variation",
-                                variation.id(),
-                                "code",
-                                change.code().format())));
+    private static BillItem createdFrom(Variation variation, VariationItem change, Optional<Rate> priced) {
+        Rate rate = priced.orElseThrow(() -> new ConflictException(
+                "a new variation item needs a rate",
+                Details.of("variation", variation.id(), "code", change.code().format())));
         if (change.quantityChange().milli() < 0) {
             throw new ConflictException(
                     "a variation cannot omit an item the bill does not carry",

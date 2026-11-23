@@ -85,7 +85,32 @@ public record Variation(
                         "an item priced at bill rates cannot carry a rate of its own",
                         Details.of("variation", input.id(), "code", code));
             }
-            if (item.basis() != ValuationBasis.BILL_RATES && item.rate().isEmpty()) {
+            if (item.proRata().isPresent() && item.basis() != ValuationBasis.PRO_RATA) {
+                throw new BadInputException(
+                        "only a pro rata item can build its rate from a bill item",
+                        Details.of(
+                                "variation",
+                                input.id(),
+                                "code",
+                                code,
+                                "basis",
+                                item.basis().wire()));
+            }
+            if (item.proRata().isPresent() && item.rate().isPresent()) {
+                throw new BadInputException(
+                        "a pro rata item either names its rate or builds it, not both",
+                        Details.of("variation", input.id(), "code", code));
+            }
+            if (item.proRata().isPresent()
+                    && (!Double.isFinite(item.proRata().get().factor())
+                            || item.proRata().get().factor() <= 0)) {
+                throw new BadInputException(
+                        "a pro rata factor has to be more than nothing",
+                        Details.of("variation", input.id(), "code", code));
+            }
+            if (item.basis() != ValuationBasis.BILL_RATES
+                    && item.rate().isEmpty()
+                    && item.proRata().isEmpty()) {
                 throw new BadInputException(
                         "an item not priced at bill rates needs its own rate",
                         Details.of(
