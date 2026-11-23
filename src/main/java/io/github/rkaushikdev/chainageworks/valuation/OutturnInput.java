@@ -30,6 +30,8 @@ import java.util.List;
  * @param calendar the site calendar the extensions are counted on; null leaves damages out
  * @param trendThreshold where the measured works switch from the bill to the trend; null means
  *     {@link FinalAccount#DEFAULT_TREND_THRESHOLD}
+ * @param takenOverOn when the works were taken over, which is where damages stop running; null
+ *     while they have not been
  */
 public record OutturnInput(
         ProgressContext context,
@@ -43,7 +45,8 @@ public record OutturnInput(
         CompletionTerms completion,
         List<DelayEvent> delayEvents,
         SiteCalendar calendar,
-        Percent trendThreshold) {
+        Percent trendThreshold,
+        LocalDate takenOverOn) {
 
     public OutturnInput {
         variations = variations == null ? List.of() : List.copyOf(variations);
@@ -54,105 +57,105 @@ public record OutturnInput(
 
     /** The measured works on their own, with none of the other parts. */
     public static OutturnInput of(ProgressContext context, LocalDate asAt, Money contractSum) {
-        return new OutturnInput(context, asAt, contractSum, null, null, null, null, null, null, null, null, null);
+        return new OutturnInput(context, asAt, contractSum, null, null, null, null, null, null, null, null, null, null);
     }
 
     public OutturnInput withVariations(List<Variation> other) {
-        return new OutturnInput(
-                context,
-                asAt,
-                contractSum,
-                other,
-                dayworkSchedule,
-                dayworkSheets,
-                adjustment,
-                indices,
-                completion,
-                delayEvents,
-                calendar,
-                trendThreshold);
+        Draft draft = new Draft(this);
+        draft.variations = other;
+        return draft.input();
     }
 
     /** The daywork schedule and the sheets valued against it. */
     public OutturnInput withDaywork(DayworkSchedule schedule, List<DayworkSheet> sheets) {
-        return new OutturnInput(
-                context,
-                asAt,
-                contractSum,
-                variations,
-                schedule,
-                sheets,
-                adjustment,
-                indices,
-                completion,
-                delayEvents,
-                calendar,
-                trendThreshold);
+        Draft draft = new Draft(this);
+        draft.dayworkSchedule = schedule;
+        draft.dayworkSheets = sheets;
+        return draft.input();
     }
 
     /** The fluctuation clause and the index series it reads. */
     public OutturnInput withAdjustment(AdjustmentTerms terms, List<IndexSeries> series) {
-        return new OutturnInput(
-                context,
-                asAt,
-                contractSum,
-                variations,
-                dayworkSchedule,
-                dayworkSheets,
-                terms,
-                series,
-                completion,
-                delayEvents,
-                calendar,
-                trendThreshold);
+        Draft draft = new Draft(this);
+        draft.adjustment = terms;
+        draft.indices = series;
+        return draft.input();
     }
 
     /** The completion terms and the site calendar the extensions are counted on. */
     public OutturnInput withCompletion(CompletionTerms terms, SiteCalendar siteCalendar) {
-        return new OutturnInput(
-                context,
-                asAt,
-                contractSum,
-                variations,
-                dayworkSchedule,
-                dayworkSheets,
-                adjustment,
-                indices,
-                terms,
-                delayEvents,
-                siteCalendar,
-                trendThreshold);
+        Draft draft = new Draft(this);
+        draft.completion = terms;
+        draft.calendar = siteCalendar;
+        return draft.input();
     }
 
     public OutturnInput withDelayEvents(List<DelayEvent> other) {
-        return new OutturnInput(
-                context,
-                asAt,
-                contractSum,
-                variations,
-                dayworkSchedule,
-                dayworkSheets,
-                adjustment,
-                indices,
-                completion,
-                other,
-                calendar,
-                trendThreshold);
+        Draft draft = new Draft(this);
+        draft.delayEvents = other;
+        return draft.input();
     }
 
     public OutturnInput withTrendThreshold(Percent other) {
-        return new OutturnInput(
-                context,
-                asAt,
-                contractSum,
-                variations,
-                dayworkSchedule,
-                dayworkSheets,
-                adjustment,
-                indices,
-                completion,
-                delayEvents,
-                calendar,
-                other);
+        Draft draft = new Draft(this);
+        draft.trendThreshold = other;
+        return draft.input();
+    }
+
+    /** The day the works were taken over, after which no more damages accrue. */
+    public OutturnInput withTakenOverOn(LocalDate other) {
+        Draft draft = new Draft(this);
+        draft.takenOverOn = other;
+        return draft.input();
+    }
+
+    /** A copy of the input with some parts changed, so each wither names only its own parts. */
+    private static final class Draft {
+        private final ProgressContext context;
+        private final LocalDate asAt;
+        private final Money contractSum;
+        private List<Variation> variations;
+        private DayworkSchedule dayworkSchedule;
+        private List<DayworkSheet> dayworkSheets;
+        private AdjustmentTerms adjustment;
+        private List<IndexSeries> indices;
+        private CompletionTerms completion;
+        private List<DelayEvent> delayEvents;
+        private SiteCalendar calendar;
+        private Percent trendThreshold;
+        private LocalDate takenOverOn;
+
+        private Draft(OutturnInput input) {
+            context = input.context;
+            asAt = input.asAt;
+            contractSum = input.contractSum;
+            variations = input.variations;
+            dayworkSchedule = input.dayworkSchedule;
+            dayworkSheets = input.dayworkSheets;
+            adjustment = input.adjustment;
+            indices = input.indices;
+            completion = input.completion;
+            delayEvents = input.delayEvents;
+            calendar = input.calendar;
+            trendThreshold = input.trendThreshold;
+            takenOverOn = input.takenOverOn;
+        }
+
+        private OutturnInput input() {
+            return new OutturnInput(
+                    context,
+                    asAt,
+                    contractSum,
+                    variations,
+                    dayworkSchedule,
+                    dayworkSheets,
+                    adjustment,
+                    indices,
+                    completion,
+                    delayEvents,
+                    calendar,
+                    trendThreshold,
+                    takenOverOn);
+        }
     }
 }

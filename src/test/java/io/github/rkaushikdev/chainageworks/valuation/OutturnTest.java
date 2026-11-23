@@ -175,6 +175,17 @@ class OutturnTest {
         }
 
         @Test
+        void deductsOnlyTheDamagesThatRanBeforeTakeover() {
+            OutturnInput late = BASE.withCompletion(COMPLETION, CALENDAR).withDelayEvents(List.of());
+            Outturn running = Outturn.build(late);
+            Outturn takenOver = Outturn.build(late.withTakenOverOn(COMPLETION.baseCompletion()));
+            assertThat(running.damages().minor()).isPositive();
+            assertThat(takenOver.damages().minor()).isZero();
+            assertThat(takenOver.total().minor() - running.total().minor())
+                    .isEqualTo(running.damages().minor());
+        }
+
+        @Test
         void reportsHowLateTheJobIsForecastToBe() {
             assertThat(Outturn.forecastDaysLate(
                             BASE.withCompletion(COMPLETION, CALENDAR).withDelayEvents(List.of())))

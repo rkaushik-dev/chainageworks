@@ -25,7 +25,7 @@ import java.util.Optional;
  * @param asAt the date the position is taken at
  * @param lines one line per event that had started by then, in the order they started
  * @param position where completion stands
- * @param daysLate calendar days past the extended completion date
+ * @param daysLate calendar days past the extended completion date, stopped at takeover
  * @param damages liquidated damages to date
  * @param damagesCapped whether the damages have run into the contract cap
  */
@@ -79,7 +79,23 @@ public record DelayReport(
      */
     public static DelayReport build(
             CompletionTerms terms, List<DelayEvent> events, SiteCalendar calendar, Money contractSum, LocalDate asAt) {
+        return build(terms, events, calendar, contractSum, asAt, Optional.empty());
+    }
+
+    /**
+     * The position at {@code asAt}, with the damages stopped on the day the works were taken over.
+     *
+     * @param takenOverOn when the works were taken over, empty while they have not been
+     */
+    public static DelayReport build(
+            CompletionTerms terms,
+            List<DelayEvent> events,
+            SiteCalendar calendar,
+            Money contractSum,
+            LocalDate asAt,
+            Optional<LocalDate> takenOverOn) {
         CompletionTerms.Position position = terms.position(events, calendar, asAt);
+        CompletionTerms.Damages damages = terms.damages(position, contractSum, asAt, takenOverOn);
         List<DelayLine> lines = DelayEvent.eventsTo(events, asAt).stream()
                 .map(event -> new DelayLine(
                         event.id(),
@@ -93,13 +109,7 @@ public record DelayReport(
                         event.barReason(terms.noticeDays()),
                         event.carriesMoney(terms.noticeDays())))
                 .toList();
-        return new DelayReport(
-                asAt,
-                lines,
-                position,
-                position.daysLate(asAt),
-                terms.liquidatedDamages(position, contractSum, asAt),
-                terms.isDamagesCapped(position, contractSum, asAt));
+        return new DelayReport(asAt, lines, position, damages.days(), damages.amount(), damages.capped());
     }
 
     /** Events that would have bought time and did not, because of the paperwork. */

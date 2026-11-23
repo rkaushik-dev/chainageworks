@@ -175,22 +175,41 @@ public record CompletionTerms(
         return new Award(days, concurrent);
     }
 
-    /** Damages at a date, capped where the contract caps them. */
+    /**
+     * The damages owed at a date.
+     *
+     * @param days calendar days the damages run for
+     * @param amount what they come to, after the cap
+     * @param capped true when the cap is what decided the amount
+     */
+    public record Damages(int days, Money amount, boolean capped) {}
+
+    /**
+     * Damages at a date, capped where the contract caps them.
+     *
+     * <p>They run from the extended completion date to the cut-off, or to the day the works were
+     * taken over when that comes first. Once the employer has the works back there is nothing late
+     * left to compensate for, and a report that kept counting would go on deducting money for a
+     * road that has been open to traffic for months.
+     *
+     * @param takenOverOn when the works were taken over, empty while they have not been
+     */
+    public Damages damages(Position position, Money contractSum, LocalDate asAt, Optional<LocalDate> takenOverOn) {
+        LocalDate runsTo = takenOverOn.map(on -> SiteDates.min(on, asAt)).orElse(asAt);
+        int late = position.daysLate(runsTo);
+        Money raw = late == 0 ? Money.zero(damagesPerDay.currency()) : damagesPerDay.scale(late);
+        Optional<Money> cap = damagesCap.map(share -> share.of(contractSum));
+        boolean capped = cap.map(limit -> raw.minor() > limit.minor()).orElse(false);
+        return new Damages(late, capped ? cap.get() : raw, capped);
+    }
+
+    /** Damages at a date, capped where the contract caps them, with the works not yet taken over. */
     public Money liquidatedDamages(Position position, Money contractSum, LocalDate asAt) {
-        int late = position.daysLate(asAt);
-        if (late == 0) {
-            return Money.zero(damagesPerDay.currency());
-        }
-        Money raw = damagesPerDay.scale(late);
-        return damagesCap.map(cap -> Money.min(raw, cap.of(contractSum))).orElse(raw);
+        return damages(position, contractSum, asAt, Optional.empty()).amount();
     }
 
     /** Whether the damages at a date have run into the cap. */
     public boolean isDamagesCapped(Position position, Money contractSum, LocalDate asAt) {
-        if (damagesCap.isEmpty()) {
-            return false;
-        }
-        Money raw = damagesPerDay.scale(position.daysLate(asAt));
-        return raw.minor() > damagesCap.get().of(contractSum).minor();
+        return damages(position, contractSum, asAt, Optional.empty()).capped();
     }
 }

@@ -15,6 +15,7 @@ import io.github.rkaushikdev.chainageworks.util.Text;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class DelayReportTest {
@@ -99,5 +100,20 @@ class DelayReportTest {
         assertThat(lines).contains("days late     84", "damages       £31,219.00");
         assertThat(lines.subList(lines.size() - 2, lines.size()))
                 .containsExactly("", "damages have reached the contract cap");
+    }
+
+    @Test
+    void stopsCountingTheDaysLateOnceTheWorksAreTakenOver() {
+        DelayReport takenOver = DelayReport.build(
+                JOB.settings().completion().orElseThrow(),
+                JOB.delayEvents().all(),
+                JOB.calendar(),
+                JOB.settings().contractSum(),
+                d("2025-12-31"),
+                Optional.of(d("2025-10-18")));
+        assertThat(takenOver.daysLate()).isEqualTo(10);
+        assertThat(takenOver.damagesCapped()).isFalse();
+        assertThat(takenOver.damages().minor())
+                .isLessThan(reportAt(d("2025-12-31")).damages().minor());
     }
 }

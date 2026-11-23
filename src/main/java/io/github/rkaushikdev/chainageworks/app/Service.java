@@ -263,7 +263,12 @@ public final class Service {
         LocalDate cutOff = period(number).cutOff();
         return settings.completion()
                 .map(terms -> DelayReport.build(
-                        terms, job.delayEvents().all(), job.calendar(), settings.contractSum(), cutOff));
+                        terms,
+                        job.delayEvents().all(),
+                        job.calendar(),
+                        settings.contractSum(),
+                        cutOff,
+                        settings.substantialCompletionOn()));
     }
 
     /**
@@ -357,7 +362,8 @@ public final class Service {
                 settings.completion().orElse(null),
                 job.delayEvents().all(),
                 job.calendar(),
-                null);
+                null,
+                settings.substantialCompletionOn().orElse(null));
     }
 
     /** The anticipated final account at the cut-off of valuation {@code number}. */

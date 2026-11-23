@@ -11,6 +11,7 @@ import io.github.rkaushikdev.chainageworks.domain.time.SiteCalendar;
 import io.github.rkaushikdev.chainageworks.domain.time.SiteDates;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -224,6 +225,41 @@ class CompletionTermsTest {
             assertThat(TERMS.isDamagesCapped(position, CONTRACT_SUM, veryLate)).isTrue();
             assertThat(TERMS.isDamagesCapped(position, CONTRACT_SUM, d("2025-10-15")))
                     .isFalse();
+        }
+
+        @Test
+        void stopsRunningOnTheDayTheWorksAreTakenOver() {
+            CompletionTerms.Damages damages =
+                    TERMS.damages(position, CONTRACT_SUM, d("2025-12-31"), Optional.of(d("2025-10-15")));
+            assertThat(damages.days()).isEqualTo(7);
+            assertThat(damages.amount().major()).isEqualTo(7 * 2500);
+            assertThat(damages.capped()).isFalse();
+        }
+
+        @Test
+        void keepsRunningToTheCutOffWhenTakeoverIsStillAhead() {
+            CompletionTerms.Damages damages =
+                    TERMS.damages(position, CONTRACT_SUM, d("2025-10-15"), Optional.of(d("2025-11-30")));
+            assertThat(damages.days()).isEqualTo(7);
+            assertThat(TERMS.damages(position, CONTRACT_SUM, d("2025-10-15"), Optional.empty()))
+                    .isEqualTo(damages);
+        }
+
+        @Test
+        void owesNothingWhenTheWorksWereTakenOverInsideTheExtension() {
+            CompletionTerms.Damages damages =
+                    TERMS.damages(position, CONTRACT_SUM, d("2026-06-30"), Optional.of(d("2025-10-01")));
+            assertThat(damages.days()).isZero();
+            assertThat(damages.amount().minor()).isZero();
+            assertThat(damages.capped()).isFalse();
+        }
+
+        @Test
+        void stillReachesTheCapWhenTakeoverCameVeryLate() {
+            CompletionTerms.Damages damages =
+                    TERMS.damages(position, CONTRACT_SUM, d("2026-09-30"), Optional.of(d("2026-06-30")));
+            assertThat(damages.capped()).isTrue();
+            assertThat(damages.amount().major()).isEqualTo(200_000);
         }
 
         @Test

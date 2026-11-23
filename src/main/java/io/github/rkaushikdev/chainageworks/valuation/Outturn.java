@@ -12,6 +12,7 @@ import io.github.rkaushikdev.chainageworks.domain.variation.VariationApplication
 import io.github.rkaushikdev.chainageworks.util.Numbers;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * The anticipated final account: everything the job is going to be worth.
@@ -105,7 +106,8 @@ public record Outturn(
             return Money.zero(currency);
         }
         CompletionTerms.Position position = terms.position(input.delayEvents(), input.calendar(), input.asAt());
-        return terms.liquidatedDamages(position, input.contractSum(), input.asAt());
+        return terms.damages(position, input.contractSum(), input.asAt(), Optional.ofNullable(input.takenOverOn()))
+                .amount();
     }
 
     /**
