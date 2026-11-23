@@ -79,6 +79,48 @@ class ToleranceSetTest {
     }
 
     @Nested
+    class HeadingsInsideAClass {
+
+        private final ToleranceSet set = ToleranceSet.build(List.of(
+                Rule.fallback(Percent.of(2.5)),
+                Rule.forClass("E", Percent.of(10)),
+                Rule.forHeading(c("E42"), Percent.of(20)),
+                Rule.forHeading(c("E423.1"), Percent.of(1))));
+
+        @Test
+        void givesAnItemTheMostSpecificRuleThatCoversIt() {
+            assertThat(set.allowanceFor(c("E423.1")).value()).isEqualTo(1);
+            assertThat(set.allowanceFor(c("E424.1")).value()).isEqualTo(20);
+            assertThat(set.allowanceFor(c("E411.1")).value()).isEqualTo(10);
+            assertThat(set.allowanceFor(c("K132.1")).value()).isEqualTo(2.5);
+        }
+
+        @Test
+        void namesTheRuleAnItemFellUnder() {
+            assertThat(set.ruleFor(c("E424.1")).heading()).contains(c("E42"));
+            assertThat(set.ruleFor(c("R712.1")).heading()).isEmpty();
+        }
+
+        @Test
+        void ranksAHeadingByHowFarDownTheCodeItReaches() {
+            assertThat(Rule.fallback(Percent.of(1)).specificity()).isZero();
+            assertThat(Rule.forClass("E", Percent.of(1)).specificity()).isEqualTo(1);
+            assertThat(Rule.forHeading(c("E42"), Percent.of(1)).specificity()).isEqualTo(3);
+            assertThat(Rule.forHeading(c("E42"), Percent.of(1)).covers(c("E511.1")))
+                    .isFalse();
+        }
+
+        @Test
+        void refusesTwoRulesForOneHeading() {
+            assertThatThrownBy(() -> ToleranceSet.build(List.of(
+                            Rule.fallback(Percent.of(1)),
+                            Rule.forHeading(c("E42"), Percent.of(5)),
+                            Rule.forHeading(c("E42"), Percent.of(10)))))
+                    .hasMessageContaining("same work class");
+        }
+    }
+
+    @Nested
     class AllowedQuantity {
 
         private final WorkPackage earthworksOne = samplePackages().get(0);

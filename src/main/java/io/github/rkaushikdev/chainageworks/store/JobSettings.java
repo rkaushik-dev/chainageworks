@@ -215,6 +215,13 @@ public record JobSettings(
         return draft.settings();
     }
 
+    /** These settings with the over measure allowances replaced, as a revised specification does. */
+    public JobSettings withTolerances(ToleranceSet other) {
+        Draft draft = new Draft(this);
+        draft.tolerances = other;
+        return draft.settings();
+    }
+
     public JobSettings withWorkingDays(List<Integer> other) {
         Draft draft = new Draft(this);
         draft.workingDays = other;
@@ -251,7 +258,7 @@ public record JobSettings(
         private final int riskMeetingDays;
         private Money haulRate;
         private List<HaulLink> haulLinks;
-        private final ToleranceSet tolerances;
+        private ToleranceSet tolerances;
         private List<Integer> workingDays;
         private final int cutOffDay;
         private final int issueDays;

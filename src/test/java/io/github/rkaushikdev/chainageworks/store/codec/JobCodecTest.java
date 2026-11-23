@@ -24,6 +24,7 @@ import io.github.rkaushikdev.chainageworks.domain.money.Percent;
 import io.github.rkaushikdev.chainageworks.domain.money.Rate;
 import io.github.rkaushikdev.chainageworks.domain.quantity.Quantity;
 import io.github.rkaushikdev.chainageworks.domain.quantity.Unit;
+import io.github.rkaushikdev.chainageworks.domain.survey.ToleranceSet;
 import io.github.rkaushikdev.chainageworks.domain.time.Standdown;
 import io.github.rkaushikdev.chainageworks.domain.time.StanddownReason;
 import io.github.rkaushikdev.chainageworks.domain.variation.ValuationBasis;
@@ -262,6 +263,21 @@ class JobCodecTest {
             assertThat(again.defects().require("DF-90").preventsUse()).isTrue();
             assertThat(again.defects().all().stream().filter(Defect::preventsUse))
                     .hasSize(1);
+        }
+
+        @Test
+        void keepsAToleranceRuleWrittenAgainstAHeading() {
+            Job job = sampleJob();
+            ToleranceSet rules = ToleranceSet.build(List.of(
+                    ToleranceSet.Rule.fallback(Percent.of(2.5)),
+                    ToleranceSet.Rule.forClass("E", Percent.of(10)),
+                    ToleranceSet.Rule.forHeading(ItemCode.parse("E42"), Percent.of(20))));
+            job.setSettings(job.settings().withTolerances(rules));
+            JsonNode written = JobCodec.toJson(job).path("settings").path("tolerances");
+            assertThat(written.get(1).path("workClass").asText()).isEqualTo("E");
+            assertThat(written.get(2).path("heading").asText()).isEqualTo("E42");
+            assertThat(through(job).settings().tolerances().allowanceFor(ItemCode.parse("E423.1")))
+                    .isEqualTo(Percent.of(20));
         }
 
         @Test

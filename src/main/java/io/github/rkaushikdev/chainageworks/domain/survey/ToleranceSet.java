@@ -10,6 +10,7 @@ import io.github.rkaushikdev.chainageworks.domain.packages.WorkPackage;
 import io.github.rkaushikdev.chainageworks.domain.quantity.Quantity;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -21,8 +22,11 @@ import java.util.Set;
  * <p>Earthworks routinely overruns because the ground is not what the borehole said, and a count
  * of manhole covers does not. One allowance for the whole job therefore either buries the
  * earthworks or floods the report with drainage noise, so the allowance is set per work class.
+ * Inside a class the trades differ again, excavation in rock against general excavation say, so a
+ * rule can name a heading below the class as well, and the most specific rule that covers an item
+ * is the one it gets.
  *
- * @param rules one rule per work class, plus the fallback rule everything else uses
+ * @param rules one rule per work class or heading, plus the fallback rule everything else uses
  */
 public record ToleranceSet(List<Rule> rules) {
 
@@ -31,25 +35,42 @@ public record ToleranceSet(List<Rule> rules) {
     }
 
     /**
-     * The allowance for one work class.
+     * The allowance for one work class or one heading inside it.
      *
-     * @param workClass the class letter, or absent for the fallback rule
+     * @param heading the class, or a heading below it such as {@code E42}, or absent for the fallback
+     *     rule
      * @param allowance how far over the allocation it may measure
      */
-    public record Rule(Optional<String> workClass, Percent allowance) {
+    public record Rule(Optional<ItemCode> heading, Percent allowance) {
 
         public Rule {
-            workClass = workClass == null ? Optional.empty() : workClass;
+            heading = heading == null ? Optional.empty() : heading;
         }
 
         /** The rule for one work class. */
         public static Rule forClass(String workClass, Percent allowance) {
-            return new Rule(Optional.of(workClass), allowance);
+            return forHeading(ItemCode.of(workClass), allowance);
+        }
+
+        /** The rule for every item under a heading, such as {@code E42} for excavation in rock. */
+        public static Rule forHeading(ItemCode heading, Percent allowance) {
+            return new Rule(Optional.of(heading), allowance);
         }
 
         /** The rule every class without one of its own falls back to. */
         public static Rule fallback(Percent allowance) {
             return new Rule(Optional.empty(), allowance);
+        }
+
+        /** True when the rule is written against {@code code} itself or a heading above it. */
+        public boolean covers(ItemCode code) {
+            return heading.map(h -> h.key().equals(code.key()) || h.isAncestorOf(code))
+                    .orElse(true);
+        }
+
+        /** How far down the code the rule reaches: nought for the fallback, one for a class. */
+        public int specificity() {
+            return heading.map(h -> h.depth() + 1).orElse(0);
         }
     }
 
@@ -81,11 +102,11 @@ public record ToleranceSet(List<Rule> rules) {
             Rule.forClass("K", Percent.of(0)),
             Rule.forClass("I", Percent.of(5))));
 
-    /** Build a set, refusing two rules for one class, a negative allowance and a missing fallback. */
+    /** Build a set, refusing two rules for one heading, a negative allowance and a missing fallback. */
     public static ToleranceSet build(List<Rule> rules) {
         Set<String> seen = new HashSet<>();
         for (Rule rule : rules) {
-            String key = rule.workClass().orElse("*");
+            String key = rule.heading().map(ItemCode::format).orElse("*");
             if (!seen.add(key)) {
                 throw new BadInputException(
                         "two tolerance rules cover the same work class", Details.of("workClass", key));
@@ -100,19 +121,17 @@ public record ToleranceSet(List<Rule> rules) {
         return new ToleranceSet(rules);
     }
 
-    /** The allowance a code's work class gets. */
-    public Percent allowanceFor(ItemCode code) {
-        Optional<Rule> specific = rules.stream()
-                .filter(r -> r.workClass().equals(Optional.of(code.workClass())))
-                .findFirst();
-        if (specific.isPresent()) {
-            return specific.get().allowance();
-        }
+    /** The rule a code falls under: the most specific one that covers it. */
+    public Rule ruleFor(ItemCode code) {
         return rules.stream()
-                .filter(r -> r.workClass().isEmpty())
-                .findFirst()
-                .orElseThrow(() -> new BadInputException("a tolerance set needs a fallback rule"))
-                .allowance();
+                .filter(rule -> rule.covers(code))
+                .max(Comparator.comparingInt(Rule::specificity))
+                .orElseThrow(() -> new BadInputException("a tolerance set needs a fallback rule"));
+    }
+
+    /** The allowance a code gets from the most specific rule covering it. */
+    public Percent allowanceFor(ItemCode code) {
+        return ruleFor(code).allowance();
     }
 
     /** What the package may measure before anybody has to explain themselves. */

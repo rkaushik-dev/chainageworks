@@ -27,6 +27,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.github.rkaushikdev.chainageworks.BadInputException;
 import io.github.rkaushikdev.chainageworks.Details;
+import io.github.rkaushikdev.chainageworks.domain.bill.ItemCode;
 import io.github.rkaushikdev.chainageworks.domain.credit.CreditProfile;
 import io.github.rkaushikdev.chainageworks.domain.money.Currency;
 import io.github.rkaushikdev.chainageworks.domain.money.Money;
@@ -42,6 +43,7 @@ import io.github.rkaushikdev.chainageworks.valuation.AdvancePayment;
 import io.github.rkaushikdev.chainageworks.valuation.InterimTerms;
 import io.github.rkaushikdev.chainageworks.valuation.RetentionTerms;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -273,7 +275,13 @@ public final class JobCodec {
         json.set("haulLinks", listToJson(settings.haulLinks(), EarthworksCodec::haulLinkToJson));
         json.set("tolerances", listToJson(settings.tolerances().rules(), rule -> {
             ObjectNode entry = Json.object();
-            entry.set("workClass", ValueCodec.text(rule.workClass()));
+            // A class on its own keeps the field older job files use, a heading below it says so.
+            Optional<ItemCode> heading = rule.heading();
+            if (heading.isPresent() && heading.get().depth() > 0) {
+                entry.put("heading", heading.get().format());
+            } else {
+                entry.set("workClass", ValueCodec.text(heading.map(ItemCode::workClass)));
+            }
             entry.put("allowance", percentToJson(rule.allowance()));
             return entry;
         }));
@@ -337,9 +345,12 @@ public final class JobCodec {
                         orElse(settings.path("haulLinks"), List.of()), "haul links", EarthworksCodec::haulLinkFromJson),
                 new ToleranceSet(listFromJson(settings.path("tolerances"), "tolerance rules", entry -> {
                     JsonNode rule = objectFromJson(entry, "tolerance rule");
-                    return new ToleranceSet.Rule(
-                            optional(rule.path("workClass"), workClass -> needString(workClass, "work class")),
-                            percentFromJson(rule.path("allowance")));
+                    Optional<ItemCode> heading = isAbsent(rule.path("heading"))
+                            ? optional(
+                                    rule.path("workClass"),
+                                    workClass -> ItemCode.of(needString(workClass, "work class")))
+                            : Optional.of(ItemCode.parse(needString(rule.path("heading"), "heading")));
+                    return new ToleranceSet.Rule(heading, percentFromJson(rule.path("allowance")));
                 })),
                 listFromJson(settings.path("workingDays"), "working days", day -> wholeNumber(day, "working day")),
                 wholeNumber(settings.path("cutOffDay"), "cut off day"),
