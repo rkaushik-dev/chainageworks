@@ -4,12 +4,16 @@ import static io.github.rkaushikdev.chainageworks.support.ContextFixtures.d;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.rkaushikdev.chainageworks.domain.delay.BarReason;
+import io.github.rkaushikdev.chainageworks.domain.delay.DelayCause;
+import io.github.rkaushikdev.chainageworks.domain.delay.DelayEvent;
+import io.github.rkaushikdev.chainageworks.domain.delay.DelayEventInput;
 import io.github.rkaushikdev.chainageworks.domain.delay.Entitlement;
 import io.github.rkaushikdev.chainageworks.reporting.DelayReport.DelayLine;
 import io.github.rkaushikdev.chainageworks.store.Job;
 import io.github.rkaushikdev.chainageworks.support.JobFixtures;
 import io.github.rkaushikdev.chainageworks.util.Text;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -48,6 +52,29 @@ class DelayReportTest {
                         "-----------  ---------  ----------  ----------  ----  -------  ------------",
                         "EW/2025/003  utilities  2025-03-03  2025-03-14    10        8  claimable",
                         "EW/2025/004  design     2025-03-10  2025-03-21    10           not notified"));
+    }
+
+    @Test
+    void showsTheConcurrentDaysOnlyWhenEventsOverlapped() {
+        List<DelayEvent> events = new ArrayList<>(JOB.delayEvents().all());
+        events.add(DelayEvent.build(DelayEventInput.of(
+                        "DE-OV",
+                        "EW/2025/009",
+                        DelayCause.WEATHER,
+                        "flooded haul road",
+                        d("2025-03-12"),
+                        d("2025-03-18"))
+                .withNotifiedOn(d("2025-03-12"))));
+        DelayReport report = DelayReport.build(
+                JOB.settings().completion().orElseThrow(),
+                events,
+                JOB.calendar(),
+                JOB.settings().contractSum(),
+                d("2025-03-25"));
+        assertThat(report.position().concurrentDays()).isEqualTo(3);
+        assertThat(report.position().awardedDays()).isEqualTo(8 + 2);
+        assertThat(report.render()).contains("days concurrent  3");
+        assertThat(REPORT.render()).doesNotContain("concurrent");
     }
 
     @Test

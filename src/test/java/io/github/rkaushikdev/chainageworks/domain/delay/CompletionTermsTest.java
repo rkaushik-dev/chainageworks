@@ -142,6 +142,53 @@ class CompletionTermsTest {
     }
 
     @Nested
+    class ConcurrentEvents {
+
+        private DelayEvent unassessed(String id, DelayCause cause, String from, String to) {
+            return DelayEvent.build(DelayEventInput.of(id, "EW/" + id, cause, "held up", d(from), d(to))
+                    .withNotifiedOn(d(from)));
+        }
+
+        @Test
+        void countsTwoUnassessedEventsOverTheSameWeekOnce() {
+            DelayEvent rain = unassessed("DE-10", DelayCause.WEATHER, "2025-06-02", "2025-06-06");
+            DelayEvent cable = unassessed("DE-11", DelayCause.UTILITIES, "2025-06-04", "2025-06-10");
+            CompletionTerms.Position position = TERMS.position(List.of(rain, cable), CALENDAR, d("2025-06-30"));
+            assertThat(position.awardedDays()).isEqualTo(7);
+            assertThat(position.concurrentDays()).isEqualTo(3);
+            assertThat(SiteDates.format(position.extendedCompletion())).isEqualTo("2025-10-07");
+        }
+
+        @Test
+        void addsNothingForDaysAnAssessedEventAlreadyCovers() {
+            DelayEvent overlapping = unassessed("DE-12", DelayCause.ACCESS, "2025-03-10", "2025-03-21");
+            CompletionTerms.Position position =
+                    TERMS.position(List.of(NOTIFIED, overlapping), CALENDAR, d("2025-03-31"));
+            assertThat(position.awardedDays()).isEqualTo(8 + 5);
+            assertThat(position.concurrentDays()).isEqualTo(5);
+        }
+
+        @Test
+        void leavesSeparateEventsAddingUpAsTheyAlwaysDid() {
+            DelayEvent first = unassessed("DE-13", DelayCause.GROUND, "2025-06-02", "2025-06-06");
+            DelayEvent second = unassessed("DE-14", DelayCause.GROUND, "2025-06-16", "2025-06-20");
+            CompletionTerms.Position position = TERMS.position(List.of(first, second), CALENDAR, d("2025-06-30"));
+            assertThat(position.awardedDays()).isEqualTo(10);
+            assertThat(position.concurrentDays()).isZero();
+        }
+
+        @Test
+        void doesNotLetABarredEventShareItsDaysWithAClaimableOne() {
+            DelayEvent claimable = unassessed("DE-15", DelayCause.DESIGN, "2025-06-02", "2025-06-06");
+            DelayEvent ownFault = unassessed("DE-16", DelayCause.CONTRACTOR, "2025-06-02", "2025-06-06");
+            CompletionTerms.Position position = TERMS.position(List.of(claimable, ownFault), CALENDAR, d("2025-06-30"));
+            assertThat(position.awardedDays()).isEqualTo(5);
+            assertThat(position.concurrentDays()).isZero();
+            assertThat(position.barredDays()).isEqualTo(5);
+        }
+    }
+
+    @Nested
     class DaysLateAndLiquidatedDamages {
 
         private final CompletionTerms.Position position = TERMS.position(List.of(NOTIFIED), CALENDAR, d("2025-12-31"));

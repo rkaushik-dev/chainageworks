@@ -126,14 +126,19 @@ public record DelayReport(
         List<String> sections = new ArrayList<>();
         sections.add(Table.heading("extension of time position at " + SiteDates.format(asAt)));
         sections.add("");
-        sections.add(Table.pairs(List.of(
+        List<Map.Entry<String, String>> pairs = new ArrayList<>(List.of(
                 Map.entry("completion", SiteDates.format(position.baseCompletion())),
                 Map.entry("extended to", SiteDates.format(position.extendedCompletion())),
                 Map.entry("days claimed", String.valueOf(claimedDays())),
                 Map.entry("days awarded", String.valueOf(position.awardedDays())),
-                Map.entry("days barred", String.valueOf(position.barredDays())),
-                Map.entry("days late", String.valueOf(daysLate)),
-                Map.entry("damages", damages.format()))));
+                Map.entry("days barred", String.valueOf(position.barredDays()))));
+        // Only shown when events overlapped, so a register of separate events reads as it always has.
+        if (position.concurrentDays() > 0) {
+            pairs.add(Map.entry("days concurrent", String.valueOf(position.concurrentDays())));
+        }
+        pairs.add(Map.entry("days late", String.valueOf(daysLate)));
+        pairs.add(Map.entry("damages", damages.format()));
+        sections.add(Table.pairs(pairs));
 
         if (!lines.isEmpty()) {
             sections.add("");

@@ -338,6 +338,7 @@ public final class Dto {
         dto.put("extendedCompletion", date(report.position().extendedCompletion()));
         dto.put("awardedDays", report.position().awardedDays());
         dto.put("barredDays", report.position().barredDays());
+        dto.put("concurrentDays", report.position().concurrentDays());
         dto.put("claimedDays", report.claimedDays());
         dto.put("daysLate", report.daysLate());
         dto.set("damages", money(report.damages()));

@@ -7,9 +7,10 @@ import io.github.rkaushikdev.chainageworks.domain.money.Percent;
 import io.github.rkaushikdev.chainageworks.domain.time.SiteCalendar;
 import io.github.rkaushikdev.chainageworks.domain.time.SiteDates;
 import java.time.LocalDate;
-import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * The completion terms of the contract.
@@ -48,13 +49,16 @@ public record CompletionTerms(
      * @param awardedDays working days granted by the events that were properly notified
      * @param barredDays working days lost to events the time bar shut out
      * @param barred the barred events, one by one
+     * @param concurrentDays working days two or more claimable events ran over together, counted
+     *     once in the award rather than once for each event
      */
     public record Position(
             LocalDate baseCompletion,
             LocalDate extendedCompletion,
             int awardedDays,
             int barredDays,
-            List<Barred> barred) {
+            List<Barred> barred,
+            int concurrentDays) {
 
         public Position {
             barred = List.copyOf(barred);
@@ -109,24 +113,66 @@ public record CompletionTerms(
      * <p>The barred days are reported alongside the award rather than dropped, because the
      * difference between the two is the whole of what a contractor loses to poor paperwork, and
      * nobody can act on it if the report only shows the number that survived.
+     *
+     * <p>The concurrent days are reported for the same reason. A contractor adding up the events
+     * on the register gets a bigger number than the award, and the difference is exactly the days
+     * the events shared.
      */
     public Position position(List<DelayEvent> events, SiteCalendar calendar, LocalDate asAt) {
-        int awarded = 0;
-        int barredDays = 0;
-        List<Barred> barred = new ArrayList<>();
-        for (DelayEvent event : DelayEvent.eventsTo(events, asAt)) {
-            Optional<BarReason> reason = event.barReason(noticeDays);
-            if (reason.isEmpty()) {
-                awarded += event.assessedDays(calendar, noticeDays);
+        List<DelayEvent> started = DelayEvent.eventsTo(events, asAt);
+        Award award =
+                award(started.stream().filter(e -> e.isClaimable(noticeDays)).toList(), calendar);
+        List<Barred> barred = started.stream()
+                .flatMap(event -> event.barReason(noticeDays).stream()
+                        .map(reason -> new Barred(
+                                event, reason, event.awardedDays().orElseGet(() -> event.workingDaysLost(calendar)))))
+                .toList();
+        return new Position(
+                baseCompletion,
+                calendar.addWorkingDays(baseCompletion, award.days()),
+                award.days(),
+                barred.stream().mapToInt(Barred::days).sum(),
+                barred,
+                award.concurrent());
+    }
+
+    /** What the claimable events are worth together, and how many of their days they shared. */
+    private record Award(int days, int concurrent) {}
+
+    /**
+     * Add the claimable events up without paying twice for one day.
+     *
+     * <p>An engineer's award stands as it was given, because the engineer has already weighed what
+     * else was going on. An unassessed event is the contractor's own case, and two of those running
+     * over the same week are one week of delay, not two: the works can only be held up once on any
+     * given day. A day an assessed event already covers adds nothing either.
+     */
+    private static Award award(List<DelayEvent> claimable, SiteCalendar calendar) {
+        int days = 0;
+        int concurrent = 0;
+        Set<LocalDate> counted = new HashSet<>();
+        for (DelayEvent event : claimable) {
+            if (event.isAssessed()) {
+                days += event.awardedDays().orElseThrow();
+                counted.addAll(event.period().dates());
+            }
+        }
+        for (DelayEvent event : claimable) {
+            if (event.isAssessed()) {
                 continue;
             }
-            int days = event.awardedDays().orElse(0);
-            int lost = days > 0 ? days : event.awardedDays().orElseGet(() -> event.workingDaysLost(calendar));
-            barredDays += lost;
-            barred.add(new Barred(event, reason.get(), lost));
+            for (LocalDate day : event.period().dates()) {
+                if (!calendar.isWorkingDay(day)) {
+                    continue;
+                }
+                if (counted.add(day)) {
+                    days++;
+                } else {
+                    concurrent++;
+                }
+            }
         }
-        return new Position(
-                baseCompletion, calendar.addWorkingDays(baseCompletion, awarded), awarded, barredDays, barred);
+        return new Award(days, concurrent);
     }
 
     /** Damages at a date, capped where the contract caps them. */
