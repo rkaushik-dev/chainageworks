@@ -33,6 +33,52 @@ class PaymentTermsTest {
     }
 
     @Nested
+    class RetentionLimit {
+
+        private final PaymentTerms capped = PaymentTerms.build(TERMS.withRetentionLimit(Percent.of(2)));
+
+        @Test
+        void holdsRetentionAtTheRateOnlyUpToTheLimitOnTheOrder() {
+            PaymentTerms.Position position =
+                    capped.position(APPLICATION, Optional.empty(), Optional.empty(), Optional.of(gbp(200_000)));
+            assertThat(position.retention()).isEqualTo(gbp(4000));
+            assertThat(position.netOfRetention()).isEqualTo(gbp(116_000));
+            assertThat(position.payable()).isEqualTo(gbp(56_000));
+        }
+
+        @Test
+        void holdsTheRateWhileItIsStillBelowTheLimit() {
+            PaymentTerms.Position position =
+                    capped.position(APPLICATION, Optional.empty(), Optional.empty(), Optional.of(gbp(1_000_000)));
+            assertThat(position.retention()).isEqualTo(gbp(6000));
+        }
+
+        @Test
+        void runsUncappedWithoutAnOrderValueOrALimit() {
+            assertThat(capped.position(APPLICATION, Optional.empty(), Optional.empty())
+                            .retention())
+                    .isEqualTo(gbp(6000));
+            assertThat(TERMS.position(APPLICATION, Optional.empty(), Optional.empty(), Optional.of(gbp(200_000)))
+                            .retention())
+                    .isEqualTo(gbp(6000));
+            assertThat(TERMS.retentionLimit()).isEmpty();
+        }
+
+        @Test
+        void keepsTheLimitThroughTheOtherWithers() {
+            assertThat(capped.withDueDays(28).withRetention(Percent.of(3)).retentionLimit())
+                    .contains(Percent.of(2));
+            assertThat(capped.withRetentionLimit(null).retentionLimit()).isEmpty();
+        }
+
+        @Test
+        void refusesALimitOutsideTheOrder() {
+            assertThatThrownBy(() -> PaymentTerms.build(TERMS.withRetentionLimit(Percent.of(120))))
+                    .hasMessageContaining("0 to 100 percent of the order");
+        }
+    }
+
+    @Nested
     class Build {
 
         @Test

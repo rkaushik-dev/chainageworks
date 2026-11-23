@@ -194,7 +194,8 @@ public record Subcontract(
                             .findFirst(),
                     inputs.payLess().stream()
                             .filter(n -> n.applicationId().equals(application.id()))
-                            .findFirst());
+                            .findFirst(),
+                    Optional.of(orderValue));
             certified = position.netOfRetention();
             paid.add(position.payable());
             if (position.byDefault()) {

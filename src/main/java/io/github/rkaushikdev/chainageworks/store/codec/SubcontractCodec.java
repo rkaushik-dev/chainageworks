@@ -10,6 +10,7 @@ import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.moneyFr
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.moneyToJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.needString;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.objectFromJson;
+import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.optional;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.optionalDateFromJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.optionalDateToJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.optionalString;
@@ -49,6 +50,7 @@ final class SubcontractCodec {
         json.put("payLessDays", terms.payLessDays());
         json.put("finalDays", terms.finalDays());
         json.put("retention", percentToJson(terms.retention()));
+        terms.retentionLimit().ifPresent(limit -> json.put("retentionLimit", percentToJson(limit)));
         return json;
     }
 
@@ -71,7 +73,8 @@ final class SubcontractCodec {
                 wholeNumber(raw.path("noticeDays"), "noticeDays", base.noticeDays()),
                 wholeNumber(raw.path("payLessDays"), "payLessDays", base.payLessDays()),
                 wholeNumber(raw.path("finalDays"), "finalDays", base.finalDays()),
-                isAbsent(retention) ? base.retention() : percentFromJson(retention)));
+                isAbsent(retention) ? base.retention() : percentFromJson(retention),
+                optional(raw.path("retentionLimit"), ValueCodec::percentFromJson)));
     }
 
     static ObjectNode subcontractToJson(Subcontract subcontract) {

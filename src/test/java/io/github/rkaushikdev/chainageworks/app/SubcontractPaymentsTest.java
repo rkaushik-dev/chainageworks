@@ -206,6 +206,25 @@ class SubcontractPaymentsTest {
         }
 
         @Test
+        void keepsARetentionLimitAndCertifiesAgainstIt() {
+            Job job = jobWithSubcontracts();
+            Subcontract earth = job.subcontracts().require("SC-EARTH");
+            job.subcontracts()
+                    .put(Subcontract.build(SubcontractInput.of(
+                                    earth.id(), earth.name(), earth.contractor(), earth.orderValue(), earth.placedOn())
+                            .withPackages(earth.packageIds())
+                            .withCodes(earth.codes())
+                            .withTerms(PaymentTerms.build(earth.terms().withRetentionLimit(Percent.of(1))))));
+            Job again = JobDocuments.throughText(job);
+            assertThat(again.subcontracts().require("SC-EARTH").terms().retentionLimit())
+                    .contains(Percent.of(1));
+            assertThat(again.subcontracts().require("SC-FENCE").terms().retentionLimit())
+                    .isEmpty();
+            assertThat(paymentsAt(again, 3).positions().get(0).certifiedToDate().major())
+                    .isEqualTo(117_500);
+        }
+
+        @Test
         void carriesAJobWithNoSubcontractsThroughAsEmptyRegisters() {
             Job again = JobDocuments.throughText(sampleJob());
             assertThat(again.subcontracts().count()).isZero();

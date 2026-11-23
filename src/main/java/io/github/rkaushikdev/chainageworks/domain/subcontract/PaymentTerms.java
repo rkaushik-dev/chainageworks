@@ -25,11 +25,28 @@ import java.util.Set;
  * @param payLessDays days before the final date for payment to serve a pay less notice
  * @param finalDays days from the due date to the final date for payment
  * @param retention the retention held on each payment
+ * @param retentionLimit the most retention the order allows to be held, as a share of the order
+ *     value, empty when the rate runs on uncapped
  */
-public record PaymentTerms(int dueDays, int noticeDays, int payLessDays, int finalDays, Percent retention) {
+public record PaymentTerms(
+        int dueDays,
+        int noticeDays,
+        int payLessDays,
+        int finalDays,
+        Percent retention,
+        Optional<Percent> retentionLimit) {
 
     /** The usual statutory windows and five percent retention. */
     public static final PaymentTerms DEFAULT = new PaymentTerms(30, 5, 7, 45, Percent.of(5));
+
+    public PaymentTerms {
+        retentionLimit = retentionLimit == null ? Optional.empty() : retentionLimit;
+    }
+
+    /** Terms whose retention runs on at the rate with no cap. */
+    public PaymentTerms(int dueDays, int noticeDays, int payLessDays, int finalDays, Percent retention) {
+        this(dueDays, noticeDays, payLessDays, finalDays, retention, Optional.empty());
+    }
 
     /**
      * The dates an application sets running.
@@ -47,7 +64,7 @@ public record PaymentTerms(int dueDays, int noticeDays, int payLessDays, int fin
      * @param dates the dates it set running
      * @param basis what the sum was worked out from
      * @param notifiedGross the cumulative figure the notified sum is worked out from
-     * @param retention the retention held on it
+     * @param retention the retention held on it, after any cap
      * @param netOfRetention the gross less retention
      * @param payable what is payable this time
      * @param byDefault true when the payer lost the argument by missing a notice
@@ -76,6 +93,13 @@ public record PaymentTerms(int dueDays, int noticeDays, int payLessDays, int fin
         checkDays("noticeDays", terms.noticeDays);
         checkDays("payLessDays", terms.payLessDays);
         checkDays("finalDays", terms.finalDays);
+        if (terms.retentionLimit.isPresent()
+                && (terms.retentionLimit.get().basisPoints() < 0
+                        || terms.retentionLimit.get().compareTo(Percent.FULL) > 0)) {
+            throw new BadInputException(
+                    "a retention limit runs from 0 to 100 percent of the order",
+                    Details.of("retentionLimit", terms.retentionLimit.get().format()));
+        }
         if (terms.finalDays < terms.payLessDays) {
             throw new BadInputException(
                     "the pay less window cannot start before the due date",
@@ -91,23 +115,28 @@ public record PaymentTerms(int dueDays, int noticeDays, int payLessDays, int fin
     }
 
     public PaymentTerms withDueDays(int days) {
-        return new PaymentTerms(days, noticeDays, payLessDays, finalDays, retention);
+        return new PaymentTerms(days, noticeDays, payLessDays, finalDays, retention, retentionLimit);
     }
 
     public PaymentTerms withNoticeDays(int days) {
-        return new PaymentTerms(dueDays, days, payLessDays, finalDays, retention);
+        return new PaymentTerms(dueDays, days, payLessDays, finalDays, retention, retentionLimit);
     }
 
     public PaymentTerms withPayLessDays(int days) {
-        return new PaymentTerms(dueDays, noticeDays, days, finalDays, retention);
+        return new PaymentTerms(dueDays, noticeDays, days, finalDays, retention, retentionLimit);
     }
 
     public PaymentTerms withFinalDays(int days) {
-        return new PaymentTerms(dueDays, noticeDays, payLessDays, days, retention);
+        return new PaymentTerms(dueDays, noticeDays, payLessDays, days, retention, retentionLimit);
     }
 
     public PaymentTerms withRetention(Percent other) {
-        return new PaymentTerms(dueDays, noticeDays, payLessDays, finalDays, other);
+        return new PaymentTerms(dueDays, noticeDays, payLessDays, finalDays, other, retentionLimit);
+    }
+
+    /** These terms with the retention capped at {@code other} of the order value, or uncapped for null. */
+    public PaymentTerms withRetentionLimit(Percent other) {
+        return new PaymentTerms(dueDays, noticeDays, payLessDays, finalDays, retention, Optional.ofNullable(other));
     }
 
     /** The dates {@code application} sets running under these terms. */
@@ -128,6 +157,23 @@ public record PaymentTerms(int dueDays, int noticeDays, int payLessDays, int fin
      */
     public Position position(
             PaymentApplication application, Optional<PaymentNotice> notice, Optional<PayLessNotice> payLess) {
+        return position(application, notice, payLess, Optional.empty());
+    }
+
+    /**
+     * What is actually payable on an application under an order of a known value.
+     *
+     * <p>Retention is held at the rate until the running total reaches the limit, and no further.
+     * The limit is set against the order rather than against the application, so a subcontractor
+     * applying for more than the order is worth does not have more held for it.
+     *
+     * @param orderValue the order the retention limit is set against, empty to leave it uncapped
+     */
+    public Position position(
+            PaymentApplication application,
+            Optional<PaymentNotice> notice,
+            Optional<PayLessNotice> payLess,
+            Optional<Money> orderValue) {
         Dates dates = datesFor(application);
         Currency currency = application.gross().currency();
         boolean noticeInTime =
@@ -138,7 +184,11 @@ public record PaymentTerms(int dueDays, int noticeDays, int payLessDays, int fin
         NotifiedBasis basis = payLessInTime
                 ? NotifiedBasis.PAY_LESS_NOTICE
                 : noticeInTime ? NotifiedBasis.PAYMENT_NOTICE : NotifiedBasis.APPLICATION_BY_DEFAULT;
-        Money held = retention.of(notifiedGross);
+        Money atRate = retention.of(notifiedGross);
+        Money held = retentionLimit
+                .flatMap(limit -> orderValue.map(limit::of))
+                .map(cap -> Money.min(atRate, cap))
+                .orElse(atRate);
         Money netOfRetention = notifiedGross.minus(held);
         Money fromNotices = netOfRetention.minus(application.previouslyPaid());
         Money payable = payLessInTime ? payLess.get().amount() : Money.max(fromNotices, Money.zero(currency));

@@ -116,6 +116,16 @@ class SubcontractTest {
         }
 
         @Test
+        void stopsHoldingRetentionOnceTheOrdersLimitIsReached() {
+            Subcontract capped = Subcontract.build(SubcontractInput.of(
+                            "SC-01", "bulk earthworks and capping", "Dowsett Plant Hire", gbp(250_000), d("2024-11-04"))
+                    .withTerms(PaymentTerms.build(PaymentTerms.DEFAULT.withRetentionLimit(Percent.of(1)))));
+            Subcontract.Position position = capped.position(INPUTS, d("2025-03-25"));
+            assertThat(position.certifiedToDate().major()).isEqualTo(97_500);
+            assertThat(position.remaining().major()).isEqualTo(152_500);
+        }
+
+        @Test
         void namesTheApplicationThePayerLetDefault() {
             assertThat(SUBCONTRACT.position(INPUTS, d("2025-03-25")).defaulted())
                     .containsExactly("SA-02");
