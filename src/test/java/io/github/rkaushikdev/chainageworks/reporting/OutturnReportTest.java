@@ -47,6 +47,16 @@ class OutturnReportTest {
             "------  ----------------------------------  ----------  -----------  ----------  --------  -----",
             "E423.1  excavation for cuttings, maximum …  £60,140.00  £149,401.32  £89,261.32    18.96%  trend");
 
+    /** Every item that clears both remeasurement tests, listed in full whatever the worst count. */
+    private static final List<String> RERATE = List.of(
+            "",
+            "items that may need a new rate",
+            "------------------------------",
+            "code    description                             billed     forecast    movement  quantity  complete  basis",
+            "------  ----------------------------------  ----------  -----------  ----------  --------  --------  -----",
+            "E423.1  excavation for cuttings, maximum …  £60,140.00  £149,401.32  £89,261.32   +148.4%    18.96%  trend",
+            "E532.1  filling to embankments, selected …  £30,870.00   £45,592.62  £14,722.62    +47.7%    16.58%  trend");
+
     @Test
     void setsThePartsOutThenThePositionWhenNothingHasMoved() {
         assertThat(OutturnReport.render(SERVICE.outturnFor(3)))
@@ -77,11 +87,20 @@ class OutturnReportTest {
         List<String> expected = new ArrayList<>(HEAD);
         expected.add(
                 "E532.1  filling to embankments, selected …  £30,870.00   £45,592.62  £14,722.62    16.58%  trend");
+        expected.addAll(RERATE);
         assertThat(OutturnReport.render(TRENDING)).isEqualTo(String.join("\n", expected));
     }
 
     @Test
     void listsOnlyTheWorstFewMovingItems() {
-        assertThat(Text.split(OutturnReport.render(TRENDING, 1), "\n")).isEqualTo(HEAD);
+        List<String> expected = new ArrayList<>(HEAD);
+        expected.addAll(RERATE);
+        assertThat(Text.split(OutturnReport.render(TRENDING, 1), "\n")).isEqualTo(expected);
+    }
+
+    @Test
+    void leavesTheRerateSectionOffWhenNothingHasMovedFarEnough() {
+        assertThat(SERVICE.outturnFor(3).rerateCandidates()).isEmpty();
+        assertThat(OutturnReport.render(SERVICE.outturnFor(3))).doesNotContain("new rate");
     }
 }

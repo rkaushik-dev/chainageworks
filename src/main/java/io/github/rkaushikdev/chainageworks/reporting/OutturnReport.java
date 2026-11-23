@@ -62,26 +62,51 @@ public final class OutturnReport {
         if (!moving.isEmpty()) {
             sections.add("");
             sections.add(Table.heading("items moving away from the bill", "-"));
-            sections.add(Table.render(
-                    List.of(
-                            Column.of("code"),
-                            Column.of("description").withWidth(34),
-                            Column.right("billed"),
-                            Column.right("forecast"),
-                            Column.right("movement"),
-                            Column.right("complete"),
-                            Column.of("basis")),
-                    moving.stream()
-                            .map(line -> List.of(
-                                    line.code().format(),
-                                    line.description(),
-                                    line.billed().format(),
-                                    line.forecast().format(),
-                                    line.movement().format(),
-                                    Numbers.format(line.percentComplete()) + "%",
-                                    line.extrapolated() ? "trend" : "bill"))
-                            .toList()));
+            sections.add(itemTable(moving, false));
+        }
+
+        // Listed in full whatever the worst count says: each one is a rate somebody has to agree.
+        List<FinalAccount.Line> rerate = outturn.rerateCandidates();
+        if (!rerate.isEmpty()) {
+            sections.add("");
+            sections.add(Table.heading("items that may need a new rate", "-"));
+            sections.add(itemTable(rerate, true));
         }
         return String.join("\n", sections);
+    }
+
+    /**
+     * The items as a table: what was billed, what is forecast, and how the forecast was reached,
+     * with the quantity movement as well when the table is the one reopening rates.
+     */
+    private static String itemTable(List<FinalAccount.Line> lines, boolean quantity) {
+        List<Column> columns = new ArrayList<>(List.of(
+                Column.of("code"),
+                Column.of("description").withWidth(34),
+                Column.right("billed"),
+                Column.right("forecast"),
+                Column.right("movement")));
+        if (quantity) {
+            columns.add(Column.right("quantity"));
+        }
+        columns.add(Column.right("complete"));
+        columns.add(Column.of("basis"));
+        List<List<String>> rows = new ArrayList<>();
+        for (FinalAccount.Line line : lines) {
+            List<String> row = new ArrayList<>(List.of(
+                    line.code().format(),
+                    line.description(),
+                    line.billed().format(),
+                    line.forecast().format(),
+                    line.movement().format()));
+            if (quantity) {
+                row.add((line.movement().isNegative() ? "-" : "+")
+                        + line.quantityMovement().format(1));
+            }
+            row.add(Numbers.format(line.percentComplete()) + "%");
+            row.add(line.extrapolated() ? "trend" : "bill");
+            rows.add(row);
+        }
+        return Table.render(columns, rows);
     }
 }

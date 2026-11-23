@@ -56,6 +56,12 @@ public record FinalAccount(
      */
     public static final Percent DEFAULT_TREND_THRESHOLD = Percent.of(25);
 
+    /** How far an item's quantity has to move off the bill before its rate is reopened. */
+    public static final Percent RERATE_QUANTITY_SHARE = Percent.of(10);
+
+    /** How much the movement has to be worth, against the contract sum, before anyone reopens a rate. */
+    public static final Percent RERATE_VALUE_SHARE = Percent.ofBasisPoints(1);
+
     public FinalAccount {
         lines = List.copyOf(lines);
     }
@@ -81,6 +87,18 @@ public record FinalAccount(
             Money forecast,
             Money movement,
             boolean extrapolated) {
+
+        /**
+         * The forecast movement as a share of the billed value, which at one rate is the same as the
+         * share of the billed quantity. An item billed at nothing has moved by the whole of anything
+         * forecast against it.
+         */
+        public Percent quantityMovement() {
+            if (billed.isZero()) {
+                return movement.isZero() ? Percent.ZERO : Percent.FULL;
+            }
+            return Percent.share(movement.abs(), billed);
+        }
 
         /** {@code E423.1 18.96% complete, on the trend}. */
         public String describe() {
@@ -175,6 +193,24 @@ public record FinalAccount(
                 forecast,
                 forecast.minus(billed),
                 canExtrapolate);
+    }
+
+    /**
+     * Items whose quantity is forecast to move far enough off the bill that a new rate may be due,
+     * the largest movement either way first.
+     *
+     * <p>Both tests have to be met, the way the remeasurement clauses set them: the quantity moves by
+     * more than {@link #RERATE_QUANTITY_SHARE} of what was billed, and the movement is worth more
+     * than {@link #RERATE_VALUE_SHARE} of the contract sum. The first alone would reopen the rate on
+     * every small item that doubled, the second alone on every large item that drifted a little,
+     * and neither is what the parties priced the risk of.
+     */
+    public List<Line> rerateCandidates(Money contractSum) {
+        Money floor = RERATE_VALUE_SHARE.of(contractSum);
+        return movingLines().stream()
+                .filter(line -> line.quantityMovement().compareTo(RERATE_QUANTITY_SHARE) > 0)
+                .filter(line -> line.movement().abs().compareTo(floor) > 0)
+                .toList();
     }
 
     /** Lines whose forecast has moved away from the bill, the largest movement either way first. */

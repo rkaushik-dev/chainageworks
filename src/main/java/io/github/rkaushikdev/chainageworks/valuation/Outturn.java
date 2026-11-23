@@ -138,6 +138,11 @@ public record Outturn(
                 new Part("liquidated damages", damages.negate()));
     }
 
+    /** The items forecast to move far enough off the bill that a new rate may be due. */
+    public List<FinalAccount.Line> rerateCandidates() {
+        return account.rerateCandidates(contractSum);
+    }
+
     /** True when the outturn is forecast above the contract sum. */
     public boolean isOverContractSum() {
         return movement.minor() > 0;

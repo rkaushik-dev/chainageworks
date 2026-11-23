@@ -639,6 +639,11 @@ public final class Dto {
         dto.put("overContractSum", outturn.isOverContractSum());
         dto.put("provisionalAdjustment", outturn.priceAdjustment().provisional());
         dto.set("lines", array(outturn.account().lines(), Dto::finalAccountLine));
+        dto.set(
+                "rerate",
+                strings(outturn.rerateCandidates().stream()
+                        .map(line -> line.code().format())
+                        .toList()));
         return dto;
     }
 
@@ -651,6 +656,7 @@ public final class Dto {
         dto.set("forecast", money(line.forecast()));
         dto.set("movement", money(line.movement()));
         dto.set("percentComplete", Json.number(line.percentComplete()));
+        dto.set("quantityMovement", percentNode(line.quantityMovement()));
         dto.put("extrapolated", line.extrapolated());
         return dto;
     }

@@ -6,6 +6,9 @@ import static io.github.rkaushikdev.chainageworks.support.ContextFixtures.sample
 import static io.github.rkaushikdev.chainageworks.support.ContextFixtures.sampleRecords;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.rkaushikdev.chainageworks.domain.bill.ItemCode;
+import io.github.rkaushikdev.chainageworks.domain.money.Currency;
+import io.github.rkaushikdev.chainageworks.domain.money.Money;
 import io.github.rkaushikdev.chainageworks.domain.money.Percent;
 import io.github.rkaushikdev.chainageworks.domain.survey.SurveyRecord;
 import io.github.rkaushikdev.chainageworks.progress.ProgressContext;
@@ -160,6 +163,59 @@ class FinalAccountTest {
                         .isGreaterThanOrEqualTo(
                                 Math.abs(moving.get(i).movement().minor()));
             }
+        }
+    }
+
+    @Nested
+    class Rerating {
+
+        private static final FinalAccount TRENDING = FinalAccount.build(CONTEXT, CUT_OFF, Percent.of(10));
+
+        private static Money gbp(double major) {
+            return Money.fromMajor(major, Currency.GBP);
+        }
+
+        private static FinalAccount.Line line(double billed, double forecast) {
+            return new FinalAccount.Line(
+                    ItemCode.parse("E423.1"),
+                    "excavation",
+                    gbp(billed),
+                    gbp(0),
+                    50,
+                    gbp(forecast),
+                    gbp(forecast - billed),
+                    true);
+        }
+
+        @Test
+        void readsTheMovementAsAShareOfTheBilledQuantity() {
+            assertThat(line(10_000, 11_500).quantityMovement()).isEqualTo(Percent.of(15));
+            assertThat(line(10_000, 8_000).quantityMovement()).isEqualTo(Percent.of(20));
+            assertThat(line(0, 500).quantityMovement()).isEqualTo(Percent.FULL);
+            assertThat(line(0, 0).quantityMovement()).isEqualTo(Percent.ZERO);
+        }
+
+        @Test
+        void wantsBothTheQuantityAndTheValueTestsMet() {
+            FinalAccount account = new FinalAccount(
+                    CUT_OFF,
+                    gbp(0),
+                    gbp(0),
+                    gbp(0),
+                    gbp(0),
+                    List.of(line(10_000, 10_900), line(100, 150), line(10_000, 12_000)));
+            assertThat(account.rerateCandidates(gbp(1_000_000)))
+                    .extracting(l -> l.movement().major())
+                    .containsExactly(2000.0);
+        }
+
+        @Test
+        void picksOutTheTrendingItemsThatHaveMovedFurthest() {
+            assertThat(TRENDING.rerateCandidates(gbp(312_190)))
+                    .extracting(l -> l.code().format())
+                    .containsExactly("E423.1", "E532.1");
+            assertThat(FinalAccount.build(CONTEXT, CUT_OFF).rerateCandidates(gbp(312_190)))
+                    .isEmpty();
         }
     }
 
