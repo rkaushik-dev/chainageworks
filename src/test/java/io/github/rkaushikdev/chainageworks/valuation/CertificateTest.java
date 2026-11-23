@@ -120,6 +120,25 @@ class CertificateTest {
         }
 
         @Test
+        void holdsALotWorthMoreThanItsItemHasLeftToEarn() {
+            ItemCode code = ItemCode.parse("E423.1");
+            MaterialsOnSite huge = MaterialsOnSite.build(fill().withValue(gbp(5_000_000)));
+            Certificate capped = Certificate.build(BASE.withMaterials(List.of(huge)), MARCH, Money.zero(Currency.GBP));
+            Money billed =
+                    CONTEXT.billHistory().billAsAt(MARCH.cutOff()).require(code).billedValue();
+            Money earned = Money.sum(
+                    capped.earnings().stream()
+                            .flatMap(e -> e.allocations().stream())
+                            .filter(a -> a.code().key().equals(code.key()))
+                            .map(PackageEarning.Allocation::earnedValue)
+                            .toList(),
+                    Currency.GBP);
+            assertThat(capped.materialsOnSite()).isEqualTo(billed.minus(earned));
+            assertThat(capped.materialsCapped()).containsExactly(code);
+            assertThat(capped.notes()).contains("materials for E423.1 are held to what the item has left to earn");
+        }
+
+        @Test
         void dropsThemOnceTheyAreBuiltIn() {
             MaterialsOnSite built = MaterialsOnSite.build(fill().withIncorporatedOn(d("2025-03-20")));
             Certificate after = Certificate.build(BASE.withMaterials(List.of(built)), MARCH, Money.zero(Currency.GBP));

@@ -12,6 +12,7 @@ import io.github.rkaushikdev.chainageworks.domain.quantity.Unit;
 import io.github.rkaushikdev.chainageworks.domain.time.SiteDates;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -163,6 +164,52 @@ class MaterialsOnSiteTest {
             assertThat(MaterialsOnSite.value(List.of(PIPES), d("2025-01-01"), Currency.GBP)
                             .minor())
                     .isZero();
+        }
+
+        @Test
+        void holdsTheLotsOnOneItemToWhatTheItemHasLeftToEarn() {
+            Money gbp30k = Money.fromMajor(30_000, Currency.GBP);
+            MaterialsOnSite.Claim claim = MaterialsOnSite.claim(
+                    List.of(PIPES, cement), CUT_OFF, Currency.GBP, Percent.of(90), Map.of("I185.2", gbp30k));
+            assertThat(claim.value()).isEqualTo(gbp30k);
+            assertThat(claim.capped()).containsExactly(ItemCode.parse("I185.2"));
+            assertThat(ids(claim.lots())).containsExactly("MOS-01", "MOS-02");
+        }
+
+        @Test
+        void leavesAnItemWithRoomToSpareAlone() {
+            MaterialsOnSite.Claim claim = MaterialsOnSite.claim(
+                    List.of(PIPES, cement),
+                    CUT_OFF,
+                    Currency.GBP,
+                    Percent.of(90),
+                    Map.of("I185.2", Money.fromMajor(50_000, Currency.GBP)));
+            assertThat(claim.value().major()).isEqualTo(34_560 + 5400);
+            assertThat(claim.capped()).isEmpty();
+        }
+
+        @Test
+        void certifiesNothingAgainstAnItemThatHasEarnedItsWholeValue() {
+            MaterialsOnSite.Claim claim = MaterialsOnSite.claim(
+                    List.of(PIPES),
+                    CUT_OFF,
+                    Currency.GBP,
+                    Percent.of(90),
+                    Map.of("I185.2", Money.fromMajor(-200, Currency.GBP)));
+            assertThat(claim.value().minor()).isZero();
+            assertThat(claim.capped()).hasSize(1);
+        }
+
+        @Test
+        void capsNothingForAnItemTheHeadroomDoesNotName() {
+            MaterialsOnSite.Claim claim = MaterialsOnSite.claim(
+                    List.of(PIPES),
+                    CUT_OFF,
+                    Currency.GBP,
+                    Percent.of(90),
+                    Map.of("E423.1", Money.fromMajor(1, Currency.GBP)));
+            assertThat(claim.value().major()).isEqualTo(34_560);
+            assertThat(claim.capped()).isEmpty();
         }
 
         @Test

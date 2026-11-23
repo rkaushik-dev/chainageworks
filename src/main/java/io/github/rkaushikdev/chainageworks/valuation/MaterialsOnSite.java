@@ -10,7 +10,10 @@ import io.github.rkaushikdev.chainageworks.domain.quantity.Quantity;
 import io.github.rkaushikdev.chainageworks.domain.time.SiteDates;
 import io.github.rkaushikdev.chainageworks.util.Text;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -20,7 +23,8 @@ import java.util.stream.Collectors;
  *
  * <p>Four conditions have to hold before any of it can be certified, and the fourth is the one that
  * gets missed: the material has to still be unfixed. The moment it is built in, the measured work
- * carries its value, and leaving it in this list as well pays for it twice.
+ * carries its value, and leaving it in this list as well pays for it twice. Even a lot that meets
+ * all four is only paid up to what its bill item has left to earn.
  *
  * @param id the lot
  * @param packageId the package it is for
@@ -138,11 +142,61 @@ public record MaterialsOnSite(
 
     /** The certified value of unfixed materials, after the contract allowance. */
     public static Money value(List<MaterialsOnSite> materials, LocalDate asAt, Currency currency, Percent allowance) {
-        List<MaterialsOnSite> claimable = claimable(materials, asAt);
-        if (claimable.isEmpty()) {
-            return Money.zero(currency);
+        return claim(materials, asAt, currency, allowance, Map.of()).value();
+    }
+
+    /**
+     * What the unfixed materials may be certified at.
+     *
+     * @param value the certified value after the allowance and the caps
+     * @param lots the lots that could be certified at all
+     * @param capped the bill items whose materials were held down to what the item has left to earn
+     */
+    public record Claim(Money value, List<MaterialsOnSite> lots, List<ItemCode> capped) {
+
+        public Claim {
+            lots = List.copyOf(lots);
+            capped = List.copyOf(capped);
         }
-        return Money.sum(claimable.stream().map(m -> allowance.of(m.value())).toList(), currency);
+    }
+
+    /**
+     * The certified value of unfixed materials, capped item by item at what each bill item still has
+     * left to earn.
+     *
+     * <p>Materials are paid for in advance of the work they go into, never on top of it. A lot
+     * worth more than the unearned balance of its item would have the employer paying for more
+     * pipe than the bill will ever pay to lay, so every lot booked to one item is added up and
+     * held down to that item's headroom.
+     *
+     * @param headroom what each item, by its {@link ItemCode#key()}, has left to earn; an item
+     *     missing from the map is not capped
+     */
+    public static Claim claim(
+            List<MaterialsOnSite> materials,
+            LocalDate asAt,
+            Currency currency,
+            Percent allowance,
+            Map<String, Money> headroom) {
+        List<MaterialsOnSite> lots = claimable(materials, asAt);
+        Map<String, Money> byItem = new LinkedHashMap<>();
+        Map<String, ItemCode> codes = new LinkedHashMap<>();
+        for (MaterialsOnSite lot : lots) {
+            byItem.merge(lot.code().key(), allowance.of(lot.value()), Money::plus);
+            codes.putIfAbsent(lot.code().key(), lot.code());
+        }
+        Money total = Money.zero(currency);
+        List<ItemCode> capped = new ArrayList<>();
+        for (Map.Entry<String, Money> item : byItem.entrySet()) {
+            Money claimed = item.getValue();
+            Money limit = headroom.get(item.getKey());
+            if (limit != null && claimed.compareTo(limit) > 0) {
+                claimed = Money.max(limit, Money.zero(currency));
+                capped.add(codes.get(item.getKey()));
+            }
+            total = total.plus(claimed);
+        }
+        return new Claim(total, lots, capped);
     }
 
     /** What dropped out of the list between two cut-offs, and why. */

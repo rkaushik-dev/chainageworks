@@ -3,6 +3,8 @@ package io.github.rkaushikdev.chainageworks.valuation;
 import io.github.rkaushikdev.chainageworks.BadInputException;
 import io.github.rkaushikdev.chainageworks.Details;
 import io.github.rkaushikdev.chainageworks.domain.bill.Bill;
+import io.github.rkaushikdev.chainageworks.domain.bill.BillItem;
+import io.github.rkaushikdev.chainageworks.domain.bill.ItemCode;
 import io.github.rkaushikdev.chainageworks.domain.daywork.DayworkSheet;
 import io.github.rkaushikdev.chainageworks.domain.delay.CompletionTerms;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.PriceAdjustment;
@@ -13,7 +15,9 @@ import io.github.rkaushikdev.chainageworks.progress.PackageEarning;
 import io.github.rkaushikdev.chainageworks.util.Numbers;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -28,8 +32,10 @@ import java.util.Optional;
  * @param billRevision the reference of the bill revision it was priced against
  * @param earnings what each package earned, for the backing sheets
  * @param measuredWork the packages' earnings added up
- * @param materialsOnSite the certified value of unfixed materials, after the allowance
- * @param materialsClaimed the lots of materials that were certified
+ * @param materialsOnSite the certified value of unfixed materials, after the allowance and the item caps
+ * @param materialsClaimed the lots of materials that met the conditions, before any item was capped
+ * @param materialsCapped the bill items whose materials were held down to what the item has left to
+ *     earn
  * @param daywork signed daywork, which is measured work that could not be measured
  * @param priceAdjustment what the fluctuation clause added to, or took off, the permanent work
  * @param gross the gross valuation
@@ -55,6 +61,7 @@ public record Certificate(
         Money measuredWork,
         Money materialsOnSite,
         List<MaterialsOnSite> materialsClaimed,
+        List<ItemCode> materialsCapped,
         Money daywork,
         PriceAdjustment priceAdjustment,
         Money gross,
@@ -72,6 +79,7 @@ public record Certificate(
     public Certificate {
         earnings = List.copyOf(earnings);
         materialsClaimed = List.copyOf(materialsClaimed);
+        materialsCapped = List.copyOf(materialsCapped);
         bond = bond == null ? Optional.empty() : bond;
     }
 
@@ -124,9 +132,8 @@ public record Certificate(
         List<PackageEarning> earnings = PackageEarning.earnAll(input.context(), asAt);
         Money measuredWork =
                 Money.sum(earnings.stream().map(PackageEarning::earnedValue).toList(), currency);
-        Percent allowance =
-                input.materialsAllowance() == null ? MaterialsOnSite.DEFAULT_ALLOWANCE : input.materialsAllowance();
-        Money materialsOnSite = MaterialsOnSite.value(input.materials(), asAt, currency, allowance);
+        MaterialsOnSite.Claim materials = materialsAt(input, bill, earnings, asAt);
+        Money materialsOnSite = materials.value();
         Money daywork = input.dayworkSchedule() == null
                 ? Money.zero(currency)
                 : DayworkSheet.dayworkValue(input.dayworkSchedule(), input.dayworkSheets(), asAt);
@@ -182,7 +189,8 @@ public record Certificate(
                 earnings,
                 measuredWork,
                 materialsOnSite,
-                MaterialsOnSite.claimable(input.materials(), asAt),
+                materials.lots(),
+                materials.capped(),
                 daywork,
                 adjustment,
                 gross,
@@ -205,6 +213,36 @@ public record Certificate(
      * deduction to date and each month after pays only what accrued since. They stop on the day the
      * works are taken over, which is also the day nothing more is owed.
      */
+    /** The unfixed materials at the contract allowance, each item held to what it has left to earn. */
+    private static MaterialsOnSite.Claim materialsAt(
+            CertificateInput input, Bill bill, List<PackageEarning> earnings, LocalDate asAt) {
+        Percent allowance =
+                input.materialsAllowance() == null ? MaterialsOnSite.DEFAULT_ALLOWANCE : input.materialsAllowance();
+        return MaterialsOnSite.claim(input.materials(), asAt, bill.currency(), allowance, headroom(bill, earnings));
+    }
+
+    /**
+     * What each earnable bill item has left to earn: its billed value less what the packages have
+     * earned against it so far. Provisional items are left out, because nothing may be claimed
+     * against them at all until they are instructed.
+     */
+    private static Map<String, Money> headroom(Bill bill, List<PackageEarning> earnings) {
+        Map<String, Money> earned = new HashMap<>();
+        for (PackageEarning earning : earnings) {
+            for (PackageEarning.Allocation allocation : earning.allocations()) {
+                earned.merge(allocation.code().key(), allocation.earnedValue(), Money::plus);
+            }
+        }
+        Map<String, Money> headroom = new HashMap<>();
+        for (BillItem item : bill.items()) {
+            if (item.isEarnable()) {
+                Money done = earned.getOrDefault(item.code().key(), Money.zero(bill.currency()));
+                headroom.put(item.code().key(), item.billedValue().minus(done));
+            }
+        }
+        return headroom;
+    }
+
     private static Money damagesAt(CertificateInput input, CompletionTerms.Position position, LocalDate asAt) {
         return input.completion()
                 .damages(position, input.contractSum(), asAt, Optional.ofNullable(input.substantialCompletionOn()))
@@ -311,6 +349,9 @@ public record Certificate(
         List<String> notes = new ArrayList<>();
         if (heldOver) {
             notes.add("the movement is below the minimum certificate and is held over to next month");
+        }
+        for (ItemCode code : materialsCapped) {
+            notes.add("materials for " + code.format() + " are held to what the item has left to earn");
         }
         if (retention.capReached()) {
             notes.add("retention has reached its cap");

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.rkaushikdev.chainageworks.domain.bill.ItemCode;
 import io.github.rkaushikdev.chainageworks.domain.chainage.ChainageRange;
 import io.github.rkaushikdev.chainageworks.domain.defects.Defect;
 import io.github.rkaushikdev.chainageworks.domain.earthworks.HaulAllocation;
@@ -196,6 +197,11 @@ public final class Dto {
         dto.set("notes", strings(certificate.notes()));
         dto.set("measuredWork", money(certificate.measuredWork()));
         dto.set("materialsOnSite", money(certificate.materialsOnSite()));
+        dto.set(
+                "materialsCapped",
+                strings(certificate.materialsCapped().stream()
+                        .map(ItemCode::format)
+                        .toList()));
         dto.set("daywork", money(certificate.daywork()));
         dto.set("priceAdjustment", priceAdjustment(certificate.priceAdjustment()));
         dto.set("gross", money(certificate.gross()));
