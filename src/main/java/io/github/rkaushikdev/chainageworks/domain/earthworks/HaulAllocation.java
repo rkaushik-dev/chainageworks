@@ -35,14 +35,35 @@ public record HaulAllocation(
      * @param sources where material comes from
      * @param destinations where it can go
      * @param links the haul roads between them
-     * @param haulRate cost of moving a cubic metre one kilometre
+     * @param haulRate cost of moving a cubic metre one kilometre beyond the free haul
+     * @param freeHaulKm how far material is moved before haulage is paid for at all; the rates for
+     *     excavation and filling already carry the first stretch of every haul
      */
-    public record Input(List<HaulSite> sources, List<HaulSite> destinations, List<HaulLink> links, Money haulRate) {
+    public record Input(
+            List<HaulSite> sources,
+            List<HaulSite> destinations,
+            List<HaulLink> links,
+            Money haulRate,
+            double freeHaulKm) {
 
         public Input {
             sources = List.copyOf(sources);
             destinations = List.copyOf(destinations);
             links = List.copyOf(links);
+            if (!Double.isFinite(freeHaulKm) || freeHaulKm < 0) {
+                throw new BadInputException(
+                        "a free haul is a distance of nothing or more", Details.of("freeHaulKm", freeHaulKm));
+            }
+        }
+
+        /** A plan where every kilometre of haul is paid for. */
+        public Input(List<HaulSite> sources, List<HaulSite> destinations, List<HaulLink> links, Money haulRate) {
+            this(sources, destinations, links, haulRate, 0);
+        }
+
+        /** The kilometres of a link that are paid for: whatever lies beyond the free haul. */
+        public double overhaulKm(HaulLink link) {
+            return Math.max(link.km() - freeHaulKm, 0);
         }
     }
 
@@ -58,7 +79,8 @@ public record HaulAllocation(
      * <p>Greedy on the total cost of a cubic metre rather than on the haul alone, which is the
      * point. A tip two kilometres away that charges to take material loses to a fill eight
      * kilometres away that does not, and an allocation that sorted on distance would pick the tip
-     * every time and be wrong every time.
+     * every time and be wrong every time. Inside the free haul the distance costs nothing extra, so
+     * two fills within it are told apart by distance only when everything else is equal.
      *
      * <p>Greedy rather than optimal on purpose. The real constraint on a haul plan is that the
      * answer has to be explainable to a foreman at seven in the morning, and a linear program that
@@ -66,6 +88,31 @@ public record HaulAllocation(
      */
     public static HaulAllocation allocate(Input input) {
         Currency currency = input.haulRate().currency();
+        checkSites(input);
+        Map<String, Long> left = volumes(input.sources());
+        Map<String, Long> wanted = volumes(input.destinations());
+        List<Movement> movements = new ArrayList<>();
+        for (Priced entry : priced(input)) {
+            long available = left.getOrDefault(entry.source().id(), 0L);
+            long room = wanted.getOrDefault(entry.destination().id(), 0L);
+            long moved = Math.min(available, room);
+            if (moved <= 0) {
+                continue;
+            }
+            left.put(entry.source().id(), available - moved);
+            wanted.put(entry.destination().id(), room - moved);
+            movements.add(movement(input, entry, cubicMetres(moved), currency));
+        }
+        return new HaulAllocation(
+                movements,
+                Money.sum(movements.stream().map(Movement::cost).toList(), currency),
+                Quantity.sum(
+                        left.values().stream().map(HaulAllocation::cubicMetres).toList(), Unit.M3),
+                remaining(input.destinations(), wanted, false),
+                remaining(input.destinations(), wanted, true));
+    }
+
+    private static void checkSites(Input input) {
         List<HaulSite> everySite = new ArrayList<>(input.sources());
         everySite.addAll(input.destinations());
         for (HaulSite site : everySite) {
@@ -79,24 +126,24 @@ public record HaulAllocation(
                 throw new BadInputException("a haul site cannot hold a negative volume", Details.of("site", site.id()));
             }
         }
+    }
 
-        Map<String, Long> left = new LinkedHashMap<>();
-        Map<String, HaulSite> sourceById = new LinkedHashMap<>();
-        for (HaulSite source : input.sources()) {
-            left.put(source.id(), source.volume().milli());
-            sourceById.put(source.id(), source);
-        }
-        Map<String, Long> wanted = new LinkedHashMap<>();
-        Map<String, HaulSite> destinationById = new LinkedHashMap<>();
-        for (HaulSite destination : input.destinations()) {
-            wanted.put(destination.id(), destination.volume().milli());
-            destinationById.put(destination.id(), destination);
-        }
+    private static Map<String, Long> volumes(List<HaulSite> sites) {
+        Map<String, Long> out = new LinkedHashMap<>();
+        sites.forEach(site -> out.put(site.id(), site.volume().milli()));
+        return out;
+    }
 
+    /** Every usable link with what a cubic metre costs to win, move and place along it, cheapest first. */
+    private static List<Priced> priced(Input input) {
+        Map<String, HaulSite> sources = new LinkedHashMap<>();
+        input.sources().forEach(site -> sources.put(site.id(), site));
+        Map<String, HaulSite> destinations = new LinkedHashMap<>();
+        input.destinations().forEach(site -> destinations.put(site.id(), site));
         List<Priced> priced = new ArrayList<>();
         for (HaulLink link : input.links()) {
-            HaulSite source = sourceById.get(link.fromId());
-            HaulSite destination = destinationById.get(link.toId());
+            HaulSite source = sources.get(link.fromId());
+            HaulSite destination = destinations.get(link.toId());
             if (source == null || destination == null) {
                 continue;
             }
@@ -106,7 +153,7 @@ public record HaulAllocation(
             if (source.kind() == SiteKind.BORROW && destination.kind() == SiteKind.TIP) {
                 continue;
             }
-            double rate = link.km() * input.haulRate().minor()
+            double rate = input.overhaulKm(link) * input.haulRate().minor()
                     + source.unitCost().minor()
                     + destination.unitCost().minor();
             priced.add(new Priced(link, source, destination, rate));
@@ -115,53 +162,35 @@ public record HaulAllocation(
             int byRate = Double.compare(a.rate(), b.rate());
             return byRate != 0 ? byRate : Double.compare(a.link().km(), b.link().km());
         });
+        return priced;
+    }
 
-        List<Movement> movements = new ArrayList<>();
-        for (Priced entry : priced) {
-            long available = left.getOrDefault(entry.source().id(), 0L);
-            long room = wanted.getOrDefault(entry.destination().id(), 0L);
-            long moved = Math.min(available, room);
-            if (moved <= 0) {
-                continue;
-            }
-            left.put(entry.source().id(), available - moved);
-            wanted.put(entry.destination().id(), room - moved);
+    private static Movement movement(Input input, Priced entry, Quantity volume, Currency currency) {
+        double amount = volume.amount();
+        Money haulCost = input.haulRate().scale(amount * input.overhaulKm(entry.link()));
+        Money siteCost = Money.of(
+                        entry.source().unitCost().minor()
+                                + entry.destination().unitCost().minor(),
+                        currency)
+                .scale(amount);
+        return new Movement(
+                entry.source().id(),
+                entry.destination().id(),
+                volume,
+                entry.link().km(),
+                haulCost,
+                siteCost,
+                Money.of(haulCost.minor() + siteCost.minor(), currency));
+    }
 
-            Quantity volume = cubicMetres(moved);
-            double amount = volume.amount();
-            Money haulCost = input.haulRate().scale(amount * entry.link().km());
-            Money siteCost = Money.of(
-                            entry.source().unitCost().minor()
-                                    + entry.destination().unitCost().minor(),
-                            currency)
-                    .scale(amount);
-            movements.add(new Movement(
-                    entry.source().id(),
-                    entry.destination().id(),
-                    volume,
-                    entry.link().km(),
-                    haulCost,
-                    siteCost,
-                    Money.of(haulCost.minor() + siteCost.minor(), currency)));
-        }
-
-        return new HaulAllocation(
-                movements,
-                Money.sum(movements.stream().map(Movement::cost).toList(), currency),
-                Quantity.sum(
-                        left.values().stream().map(HaulAllocation::cubicMetres).toList(), Unit.M3),
-                Quantity.sum(
-                        input.destinations().stream()
-                                .filter(site -> site.kind() != SiteKind.TIP)
-                                .map(site -> cubicMetres(wanted.getOrDefault(site.id(), 0L)))
-                                .toList(),
-                        Unit.M3),
-                Quantity.sum(
-                        input.destinations().stream()
-                                .filter(site -> site.kind() == SiteKind.TIP)
-                                .map(site -> cubicMetres(wanted.getOrDefault(site.id(), 0L)))
-                                .toList(),
-                        Unit.M3));
+    /** What is left to fill at the destinations, or the spare room at the tips. */
+    private static Quantity remaining(List<HaulSite> destinations, Map<String, Long> wanted, boolean tips) {
+        return Quantity.sum(
+                destinations.stream()
+                        .filter(site -> (site.kind() == SiteKind.TIP) == tips)
+                        .map(site -> cubicMetres(wanted.getOrDefault(site.id(), 0L)))
+                        .toList(),
+                Unit.M3);
     }
 
     /** A plan that moves nothing and costs nothing. */

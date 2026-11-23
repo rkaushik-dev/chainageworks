@@ -185,6 +185,18 @@ class HaulPlanTest {
         }
 
         @Test
+        void keepsTheFreeHaulAndPricesThePlanOnIt() {
+            Job job = haulingJob();
+            job.setSettings(job.settings().withFreeHaulKm(1));
+            Job again = JobDocuments.throughText(job);
+            assertThat(again.settings().freeHaulKm()).isEqualTo(1);
+            assertThat(planFor(again).cost().minor())
+                    .isLessThan(planFor(haulingJob()).cost().minor());
+            assertThat(JobDocuments.throughText(haulingJob()).settings().freeHaulKm())
+                    .isZero();
+        }
+
+        @Test
         void carriesAJobWithNoHaulSetUpThroughAsEmpty() {
             Job again = JobDocuments.throughText(sampleJob());
             assertThat(again.haulSites().count()).isZero();

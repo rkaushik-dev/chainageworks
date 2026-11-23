@@ -339,7 +339,8 @@ public final class Service {
                         .filter(site -> site.kind() == SiteKind.FILL || site.kind() == SiteKind.TIP)
                         .toList(),
                 job.settings().haulLinks(),
-                job.settings().haulRate()));
+                job.settings().haulRate(),
+                job.settings().freeHaulKm()));
     }
 
     /**

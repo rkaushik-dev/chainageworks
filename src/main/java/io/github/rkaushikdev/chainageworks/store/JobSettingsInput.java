@@ -35,6 +35,7 @@ import java.util.List;
  * @param riskMeetingDays days from an early warning to its meeting
  * @param haulRate what it costs to move a cubic metre one kilometre
  * @param haulLinks the haul distances between the sites on the job
+ * @param freeHaulKm how far material is moved before haulage is paid for; none when null
  * @param tolerances how far a measurement may run past its allocation
  * @param workingDays the ISO days of the week the site works
  * @param cutOffDay the day of the month the works are measured to
@@ -61,6 +62,7 @@ public record JobSettingsInput(
         Integer riskMeetingDays,
         Money haulRate,
         List<HaulLink> haulLinks,
+        Double freeHaulKm,
         ToleranceSet tolerances,
         List<Integer> workingDays,
         Integer cutOffDay,
@@ -77,6 +79,7 @@ public record JobSettingsInput(
                 name,
                 null,
                 contractSum,
+                null,
                 null,
                 null,
                 null,
@@ -171,6 +174,7 @@ public record JobSettingsInput(
         private final Integer riskMeetingDays;
         private final Money haulRate;
         private final List<HaulLink> haulLinks;
+        private final Double freeHaulKm;
         private final ToleranceSet tolerances;
         private List<Integer> workingDays;
         private Integer cutOffDay;
@@ -197,6 +201,7 @@ public record JobSettingsInput(
             riskMeetingDays = input.riskMeetingDays;
             haulRate = input.haulRate;
             haulLinks = input.haulLinks;
+            freeHaulKm = input.freeHaulKm;
             tolerances = input.tolerances;
             workingDays = input.workingDays;
             cutOffDay = input.cutOffDay;
@@ -225,6 +230,7 @@ public record JobSettingsInput(
                     riskMeetingDays,
                     haulRate,
                     haulLinks,
+                    freeHaulKm,
                     tolerances,
                     workingDays,
                     cutOffDay,

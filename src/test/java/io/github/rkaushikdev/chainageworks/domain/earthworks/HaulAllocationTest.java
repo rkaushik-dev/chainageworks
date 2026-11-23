@@ -35,6 +35,51 @@ class HaulAllocationTest {
     }
 
     @Nested
+    class FreeHaul {
+
+        private HaulAllocation withFreeHaul(double km, HaulLink... links) {
+            return HaulAllocation.allocate(
+                    new HaulAllocation.Input(List.of(CUT), List.of(EMBANKMENT, TIP), List.of(links), HAUL_RATE, km));
+        }
+
+        @Test
+        void chargesOnlyTheHaulBeyondTheFreeDistance() {
+            HaulAllocation plan = withFreeHaul(1, new HaulLink("CUT-A", "EMB-B", 3));
+            Movement only = plan.movements().get(0);
+            assertThat(only.km()).isEqualTo(3);
+            assertThat(only.haulCost()).isEqualTo(gbp(6000 * 2));
+            assertThat(plan.cost()).isEqualTo(gbp(12_000));
+        }
+
+        @Test
+        void chargesNothingForAHaulInsideTheFreeDistance() {
+            HaulAllocation plan = withFreeHaul(5, new HaulLink("CUT-A", "EMB-B", 3));
+            assertThat(plan.movements().get(0).haulCost().minor()).isZero();
+            assertThat(plan.haulMoment()).isEqualTo(6000 * 3);
+        }
+
+        @Test
+        void stillPrefersTheNearerFillWhenBothAreInsideTheFreeHaul() {
+            HaulSite near = new HaulSite("EMB-N", "embankment at 12+600", SiteKind.FILL, m3(6000), FREE);
+            HaulAllocation plan = HaulAllocation.allocate(new HaulAllocation.Input(
+                    List.of(CUT),
+                    List.of(EMBANKMENT, near),
+                    List.of(new HaulLink("CUT-A", "EMB-B", 0.8), new HaulLink("CUT-A", "EMB-N", 0.3)),
+                    HAUL_RATE,
+                    1));
+            assertThat(plan.movements().get(0).toId()).isEqualTo("EMB-N");
+        }
+
+        @Test
+        void refusesAFreeHaulBelowNothing() {
+            assertThatThrownBy(() -> new HaulAllocation.Input(List.of(), List.of(), List.of(), HAUL_RATE, -1))
+                    .hasMessageContaining("free haul");
+            assertThat(new HaulAllocation.Input(List.of(), List.of(), List.of(), HAUL_RATE).freeHaulKm())
+                    .isZero();
+        }
+    }
+
+    @Nested
     class Allocate {
 
         private final HaulAllocation allocation = allocate(

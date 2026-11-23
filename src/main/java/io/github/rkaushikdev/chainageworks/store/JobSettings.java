@@ -44,6 +44,7 @@ import java.util.Optional;
  * @param riskMeetingDays days from an early warning to the meeting the contract wants
  * @param haulRate what it costs to move a cubic metre one kilometre
  * @param haulLinks the haul distances between the sites on the job
+ * @param freeHaulKm how far material is moved before haulage is paid for
  * @param tolerances how far a measurement may run past its allocation
  * @param workingDays the ISO days of the week the site works, Monday being one
  * @param cutOffDay the day of the month the works are measured to
@@ -70,6 +71,7 @@ public record JobSettings(
         int riskMeetingDays,
         Money haulRate,
         List<HaulLink> haulLinks,
+        double freeHaulKm,
         ToleranceSet tolerances,
         List<Integer> workingDays,
         int cutOffDay,
@@ -146,6 +148,7 @@ public record JobSettings(
                 orElse(input.riskMeetingDays(), EarlyWarning.DEFAULT_MEETING_DAYS),
                 orElse(input.haulRate(), Money.zero(currency)),
                 orElse(input.haulLinks(), List.of()),
+                orElse(input.freeHaulKm(), 0.0),
                 orElse(input.tolerances(), ToleranceSet.DEFAULT),
                 orElse(input.workingDays(), SiteCalendar.DEFAULT_WORKING_DAYS),
                 cutOffDay,
@@ -209,6 +212,12 @@ public record JobSettings(
         return draft.settings();
     }
 
+    public JobSettings withFreeHaulKm(double other) {
+        Draft draft = new Draft(this);
+        draft.freeHaulKm = other;
+        return draft.settings();
+    }
+
     public JobSettings withHaulLinks(List<HaulLink> other) {
         Draft draft = new Draft(this);
         draft.haulLinks = other;
@@ -258,6 +267,7 @@ public record JobSettings(
         private final int riskMeetingDays;
         private Money haulRate;
         private List<HaulLink> haulLinks;
+        private double freeHaulKm;
         private ToleranceSet tolerances;
         private List<Integer> workingDays;
         private final int cutOffDay;
@@ -284,6 +294,7 @@ public record JobSettings(
             riskMeetingDays = settings.riskMeetingDays;
             haulRate = settings.haulRate;
             haulLinks = settings.haulLinks;
+            freeHaulKm = settings.freeHaulKm;
             tolerances = settings.tolerances;
             workingDays = settings.workingDays;
             cutOffDay = settings.cutOffDay;
@@ -312,6 +323,7 @@ public record JobSettings(
                     riskMeetingDays,
                     haulRate,
                     haulLinks,
+                    freeHaulKm,
                     tolerances,
                     workingDays,
                     cutOffDay,

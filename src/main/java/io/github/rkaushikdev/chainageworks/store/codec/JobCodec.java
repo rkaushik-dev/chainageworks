@@ -6,6 +6,7 @@ import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.dateToJ
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.isAbsent;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.listFromJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.listToJson;
+import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.looseNumber;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.moneyFromJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.moneyToJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.needString;
@@ -273,6 +274,9 @@ public final class JobCodec {
         json.put("riskMeetingDays", settings.riskMeetingDays());
         json.set("haulRate", moneyToJson(settings.haulRate()));
         json.set("haulLinks", listToJson(settings.haulLinks(), EarthworksCodec::haulLinkToJson));
+        if (settings.freeHaulKm() > 0) {
+            json.set("freeHaulKm", Json.number(settings.freeHaulKm()));
+        }
         json.set("tolerances", listToJson(settings.tolerances().rules(), rule -> {
             ObjectNode entry = Json.object();
             // A class on its own keeps the field older job files use, a heading below it says so.
@@ -343,6 +347,7 @@ public final class JobCodec {
                         : moneyFromJson(settings.path("haulRate")),
                 listFromJson(
                         orElse(settings.path("haulLinks"), List.of()), "haul links", EarthworksCodec::haulLinkFromJson),
+                isAbsent(settings.path("freeHaulKm")) ? null : looseNumber(settings.path("freeHaulKm")),
                 new ToleranceSet(listFromJson(settings.path("tolerances"), "tolerance rules", entry -> {
                     JsonNode rule = objectFromJson(entry, "tolerance rule");
                     Optional<ItemCode> heading = isAbsent(rule.path("heading"))
