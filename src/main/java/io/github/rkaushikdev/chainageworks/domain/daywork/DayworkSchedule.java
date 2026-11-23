@@ -27,13 +27,18 @@ import java.util.Set;
  * @param plant the plant lines
  * @param additions the percentage on each head
  * @param overtimeFactor what an hour outside normal working hours is worth, as a multiplier
+ * @param standingFactor what an hour of plant standing idle is worth, as a share of its rate
  */
 public record DayworkSchedule(
         Currency currency,
         List<DayworkRate> labour,
         List<DayworkRate> plant,
         DayworkAdditions additions,
-        double overtimeFactor) {
+        double overtimeFactor,
+        double standingFactor) {
+
+    /** Plant standing idle is paid at half its working rate unless the schedule says otherwise. */
+    public static final double DEFAULT_STANDING_FACTOR = 0.5;
 
     public DayworkSchedule {
         labour = List.copyOf(labour);
@@ -50,6 +55,12 @@ public record DayworkSchedule(
         if (!Double.isFinite(overtimeFactor) || overtimeFactor < 1) {
             throw new BadInputException(
                     "an overtime factor is at least one", Details.of("overtimeFactor", overtimeFactor));
+        }
+        double standingFactor = input.standingFactor() == null ? DEFAULT_STANDING_FACTOR : input.standingFactor();
+        if (!Double.isFinite(standingFactor) || standingFactor < 0 || standingFactor > 1) {
+            throw new BadInputException(
+                    "standing plant is paid at between none and all of its rate",
+                    Details.of("standingFactor", standingFactor));
         }
         for (List<DayworkRate> group : List.of(input.labour(), input.plant())) {
             Set<String> seen = new HashSet<>();
@@ -76,7 +87,7 @@ public record DayworkSchedule(
                 input.labourAddition() == null ? defaults.labour() : input.labourAddition(),
                 input.plantAddition() == null ? defaults.plant() : input.plantAddition(),
                 input.materialsAddition() == null ? defaults.materials() : input.materialsAddition());
-        return new DayworkSchedule(currency, input.labour(), input.plant(), additions, overtimeFactor);
+        return new DayworkSchedule(currency, input.labour(), input.plant(), additions, overtimeFactor, standingFactor);
     }
 
     public Optional<DayworkRate> findLabourRate(String id) {
@@ -105,6 +116,14 @@ public record DayworkSchedule(
         Money normal = entry.rate().extend(Quantity.of(hours, Unit.HR));
         Money overtime = entry.rate().extend(Quantity.of(overtimeHours, Unit.HR));
         return normal.plus(overtime.scale(overtimeFactor));
+    }
+
+    /** A plant line priced: its working hours with overtime, and its standing hours at the standing rate. */
+    public Money plantValue(PlantEntry entry) {
+        DayworkRate rate = requirePlantRate(entry.rateId());
+        Money working = hoursValue(rate, entry.hours(), entry.overtimeHours(), overtimeFactor);
+        Money standing = rate.rate().extend(Quantity.of(entry.standingHours(), Unit.HR));
+        return working.plus(standing.scale(standingFactor));
     }
 
     /** {@code value} with {@code addition} on top. */

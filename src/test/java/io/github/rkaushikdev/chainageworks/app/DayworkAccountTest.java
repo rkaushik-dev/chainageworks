@@ -132,6 +132,39 @@ class DayworkAccountTest {
         }
 
         @Test
+        void keepsStandingPlantAndTheStandingRate() {
+            Job job = sampleJob();
+            job.setSettings(job.settings()
+                    .withDaywork(DayworkSchedule.build(DayworkScheduleInput.of(
+                                    List.of(), List.of(DayworkRate.of("excavator-13t", "13 tonne excavator", 42)))
+                            .withStandingFactor(0.6))));
+            job.dayworkSheets()
+                    .add(DayworkSheet.build(new DayworkSheetInput(
+                            "DW-02",
+                            "DW/2025/015",
+                            "WP-01",
+                            "EI-046",
+                            d("2025-03-12"),
+                            d("2025-03-13"),
+                            "R Engineer",
+                            List.of(),
+                            List.of(new PlantEntry("excavator-13t", 4, 0, 3)),
+                            List.of())));
+            Job again = JobDocuments.throughText(job);
+            assertThat(again.settings().daywork().orElseThrow().standingFactor())
+                    .isEqualTo(0.6);
+            assertThat(again.dayworkSheets().require("DW-02").plant().get(0).standingHours())
+                    .isEqualTo(3);
+            assertThat(JobDocuments.throughText(jobWithDaywork())
+                            .dayworkSheets()
+                            .require("DW-01")
+                            .plant()
+                            .get(0)
+                            .standingHours())
+                    .isZero();
+        }
+
+        @Test
         void carriesAJobWithNoDayworkThroughAsNull() {
             Job again = JobDocuments.throughText(sampleJob());
             assertThat(again.settings().daywork()).isEmpty();

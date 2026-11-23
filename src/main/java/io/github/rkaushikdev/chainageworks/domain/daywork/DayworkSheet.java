@@ -99,6 +99,10 @@ public record DayworkSheet(
         for (PlantEntry entry : input.plant()) {
             checkHours(entry.hours(), "plant hours");
             checkHours(entry.overtimeHours(), "plant overtime hours");
+            checkHours(entry.standingHours(), "plant standing hours");
+            checkHours(
+                    entry.hours() + entry.overtimeHours() + entry.standingHours(),
+                    "a plant line's working and standing hours");
         }
         if (input.labour().isEmpty()
                 && input.plant().isEmpty()
@@ -145,15 +149,7 @@ public record DayworkSheet(
                         .toList(),
                 currency);
 
-        Money plantValue = Money.sum(
-                plant.stream()
-                        .map(entry -> DayworkSchedule.hoursValue(
-                                schedule.requirePlantRate(entry.rateId()),
-                                entry.hours(),
-                                entry.overtimeHours(),
-                                schedule.overtimeFactor()))
-                        .toList(),
-                currency);
+        Money plantValue = Money.sum(plant.stream().map(schedule::plantValue).toList(), currency);
 
         Money materialsValue =
                 Money.sum(materials.stream().map(MaterialEntry::value).toList(), currency);

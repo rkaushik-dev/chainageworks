@@ -181,6 +181,43 @@ class DayworkSheetTest {
         }
 
         @Test
+        void paysStandingPlantAtTheStandingRateWithTheAdditionOnTop() {
+            DayworkSheet waiting =
+                    DayworkSheet.build(BASE.withPlant(List.of(new PlantEntry("excavator-13t", 8, 0, 4))));
+            assertThat(waiting.value(SCHEDULE).plant().major()).isEqualTo(378 + 94.5);
+        }
+
+        @Test
+        void honoursAStandingRateTheScheduleSetsItself() {
+            DayworkSchedule full = DayworkSchedule.build(DayworkScheduleInput.of(
+                            List.of(), List.of(DayworkRate.of("excavator-13t", "13 tonne tracked excavator", 42)))
+                    .withStandingFactor(1));
+            assertThat(full.standingFactor()).isEqualTo(1);
+            assertThat(full.plantValue(new PlantEntry("excavator-13t", 0, 0, 2)).major())
+                    .isEqualTo(84);
+            assertThat(SCHEDULE.standingFactor()).isEqualTo(DayworkSchedule.DEFAULT_STANDING_FACTOR);
+        }
+
+        @Test
+        void refusesAStandingRateOutsideNoneToAll() {
+            DayworkScheduleInput input = DayworkScheduleInput.of(List.of(), List.of());
+            assertThatThrownBy(() -> DayworkSchedule.build(input.withStandingFactor(1.2)))
+                    .hasMessageContaining("between none and all");
+            assertThatThrownBy(() -> DayworkSchedule.build(input.withStandingFactor(-0.1)))
+                    .hasMessageContaining("between none and all");
+        }
+
+        @Test
+        void refusesAPlantLineBookedForMoreThanADayAltogether() {
+            assertThatThrownBy(() ->
+                            DayworkSheet.build(BASE.withPlant(List.of(new PlantEntry("excavator-13t", 10, 4, 12)))))
+                    .hasMessageContaining("working and standing hours cannot be more than a day");
+            assertThatThrownBy(() ->
+                            DayworkSheet.build(BASE.withPlant(List.of(new PlantEntry("excavator-13t", 8, 0, -1)))))
+                    .hasMessageContaining("standing hours cannot be negative");
+        }
+
+        @Test
         void refusesARateTheScheduleDoesNotCarry() {
             DayworkSheet stray = DayworkSheet.build(BASE.withLabour(List.of(new LabourEntry("foreman", 1, 8, 0))));
             assertThatThrownBy(() -> stray.value(SCHEDULE)).isInstanceOf(NotFoundException.class);

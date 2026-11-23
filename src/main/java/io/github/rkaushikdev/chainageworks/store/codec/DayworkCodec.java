@@ -3,6 +3,7 @@ package io.github.rkaushikdev.chainageworks.store.codec;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.currencyFromJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.dateFromJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.dateToJson;
+import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.isAbsent;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.listFromJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.listToJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.looseNumber;
@@ -76,6 +77,10 @@ final class DayworkCodec {
         additions.put("plant", percentToJson(schedule.additions().plant()));
         additions.put("materials", percentToJson(schedule.additions().materials()));
         json.set("overtimeFactor", Json.number(schedule.overtimeFactor()));
+        // Written only when the schedule departs from half rate, so an older file reads back as it was.
+        if (schedule.standingFactor() != DayworkSchedule.DEFAULT_STANDING_FACTOR) {
+            json.set("standingFactor", Json.number(schedule.standingFactor()));
+        }
         return json;
     }
 
@@ -94,7 +99,8 @@ final class DayworkCodec {
                 percentFromJson(additions.path("labour")),
                 percentFromJson(additions.path("plant")),
                 percentFromJson(additions.path("materials")),
-                looseNumber(raw.path("overtimeFactor"))));
+                looseNumber(raw.path("overtimeFactor")),
+                isAbsent(raw.path("standingFactor")) ? null : looseNumber(raw.path("standingFactor"))));
     }
 
     static ObjectNode dayworkSheetToJson(DayworkSheet sheet) {
@@ -119,6 +125,9 @@ final class DayworkCodec {
             line.put("rateId", entry.rateId());
             line.set("hours", Json.number(entry.hours()));
             line.set("overtimeHours", Json.number(entry.overtimeHours()));
+            if (entry.standingHours() > 0) {
+                line.set("standingHours", Json.number(entry.standingHours()));
+            }
             return line;
         }));
         json.set("materials", listToJson(sheet.materials(), entry -> {
@@ -153,7 +162,8 @@ final class DayworkCodec {
                     return new PlantEntry(
                             needString(line.path("rateId"), "rate id"),
                             looseNumber(line.path("hours")),
-                            looseNumber(orElse(line.path("overtimeHours"), 0)));
+                            looseNumber(orElse(line.path("overtimeHours"), 0)),
+                            looseNumber(orElse(line.path("standingHours"), 0)));
                 }),
                 listFromJson(orElse(raw.path("materials"), List.of()), "material lines", entry -> {
                     JsonNode line = objectFromJson(entry, "material line");
