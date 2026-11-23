@@ -14,6 +14,7 @@ import io.github.rkaushikdev.chainageworks.domain.subcontract.Subcontract;
 import io.github.rkaushikdev.chainageworks.domain.survey.ToleranceSet;
 import io.github.rkaushikdev.chainageworks.domain.time.SiteCalendar;
 import io.github.rkaushikdev.chainageworks.progress.OutputAllowance;
+import io.github.rkaushikdev.chainageworks.valuation.InterimTerms;
 import io.github.rkaushikdev.chainageworks.valuation.RetentionBond;
 import io.github.rkaushikdev.chainageworks.valuation.RetentionTerms;
 import java.time.LocalDate;
@@ -50,6 +51,7 @@ import java.util.Optional;
  * @param paymentDays calendar days from issue to payment falling due
  * @param substantialCompletionOn when the works were substantially complete
  * @param defectsCertificateOn when the defects certificate was issued
+ * @param interimTerms the minimum certificate and the other terms on issuing interim certificates
  */
 public record JobSettings(
         String id,
@@ -74,7 +76,8 @@ public record JobSettings(
         int issueDays,
         int paymentDays,
         Optional<LocalDate> substantialCompletionOn,
-        Optional<LocalDate> defectsCertificateOn) {
+        Optional<LocalDate> defectsCertificateOn,
+        InterimTerms interimTerms) {
 
     private static final int DEFAULT_CUT_OFF_DAY = 25;
     private static final int DEFAULT_ISSUE_DAYS = 7;
@@ -96,6 +99,7 @@ public record JobSettings(
         workingDays = List.copyOf(workingDays);
         substantialCompletionOn = substantialCompletionOn == null ? Optional.empty() : substantialCompletionOn;
         defectsCertificateOn = defectsCertificateOn == null ? Optional.empty() : defectsCertificateOn;
+        interimTerms = interimTerms == null ? InterimTerms.NONE : interimTerms;
     }
 
     /**
@@ -148,7 +152,8 @@ public record JobSettings(
                 orElse(input.issueDays(), DEFAULT_ISSUE_DAYS),
                 orElse(input.paymentDays(), DEFAULT_PAYMENT_DAYS),
                 Optional.ofNullable(input.substantialCompletionOn()),
-                Optional.ofNullable(input.defectsCertificateOn()));
+                Optional.ofNullable(input.defectsCertificateOn()),
+                orElse(input.interimTerms(), InterimTerms.NONE));
     }
 
     private static <T> T orElse(T value, T fallback) {
@@ -222,6 +227,12 @@ public record JobSettings(
         return draft.settings();
     }
 
+    public JobSettings withInterimTerms(InterimTerms other) {
+        Draft draft = new Draft(this);
+        draft.interimTerms = other;
+        return draft.settings();
+    }
+
     /** A copy of the settings with one field changed, so each wither names only its own field. */
     private static final class Draft {
         private final String id;
@@ -247,6 +258,7 @@ public record JobSettings(
         private final int paymentDays;
         private Optional<LocalDate> substantialCompletionOn;
         private final Optional<LocalDate> defectsCertificateOn;
+        private InterimTerms interimTerms;
 
         private Draft(JobSettings settings) {
             id = settings.id;
@@ -272,6 +284,7 @@ public record JobSettings(
             paymentDays = settings.paymentDays;
             substantialCompletionOn = settings.substantialCompletionOn;
             defectsCertificateOn = settings.defectsCertificateOn;
+            interimTerms = settings.interimTerms;
         }
 
         private JobSettings settings() {
@@ -298,7 +311,8 @@ public record JobSettings(
                     issueDays,
                     paymentDays,
                     substantialCompletionOn,
-                    defectsCertificateOn);
+                    defectsCertificateOn,
+                    interimTerms);
         }
     }
 }

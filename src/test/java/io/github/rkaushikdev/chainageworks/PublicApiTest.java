@@ -194,6 +194,7 @@ class PublicApiTest {
             "valuation.Certificate",
             "valuation.CertificateInput",
             "valuation.FinalAccount",
+            "valuation.InterimTerms",
             "valuation.MaterialsInput",
             "valuation.MaterialsOnSite",
             "valuation.NotClaimableReason",

@@ -31,6 +31,7 @@ import io.github.rkaushikdev.chainageworks.domain.variation.VariationStatus;
 import io.github.rkaushikdev.chainageworks.progress.PackageEarning;
 import io.github.rkaushikdev.chainageworks.store.Job;
 import io.github.rkaushikdev.chainageworks.util.Json;
+import io.github.rkaushikdev.chainageworks.valuation.InterimTerms;
 import io.github.rkaushikdev.chainageworks.valuation.MaterialsInput;
 import io.github.rkaushikdev.chainageworks.valuation.MaterialsOnSite;
 import java.util.List;
@@ -193,6 +194,23 @@ class JobCodecTest {
             assertThat(again.settings().materialsAllowance()).contains(Percent.of(85));
             assertThat(again.settings().workingDays()).containsExactly(1, 2, 3, 4, 5, 6);
             assertThat(again.settings().substantialCompletionOn()).contains(d("2025-11-01"));
+        }
+
+        @Test
+        void keepsTheMinimumCertificateAndLeavesItOutWhenThereIsNone() {
+            Job job = sampleJob();
+            job.setSettings(
+                    job.settings().withInterimTerms(InterimTerms.withMinimum(Money.fromMajor(25_000, Currency.GBP))));
+            assertThat(JobCodec.toJson(job)
+                            .path("settings")
+                            .path("minimumCertificate")
+                            .isMissingNode())
+                    .isFalse();
+            assertThat(through(job).settings().interimTerms().minimumCertificate())
+                    .contains(Money.fromMajor(25_000, Currency.GBP));
+            assertThat(JobCodec.toJson(sampleJob()).path("settings").has("minimumCertificate"))
+                    .isFalse();
+            assertThat(through(sampleJob()).settings().interimTerms()).isEqualTo(InterimTerms.NONE);
         }
 
         @Test

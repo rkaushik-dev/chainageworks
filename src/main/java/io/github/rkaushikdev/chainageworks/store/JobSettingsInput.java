@@ -9,6 +9,7 @@ import io.github.rkaushikdev.chainageworks.domain.money.Money;
 import io.github.rkaushikdev.chainageworks.domain.money.Percent;
 import io.github.rkaushikdev.chainageworks.domain.survey.ToleranceSet;
 import io.github.rkaushikdev.chainageworks.progress.OutputAllowance;
+import io.github.rkaushikdev.chainageworks.valuation.InterimTerms;
 import io.github.rkaushikdev.chainageworks.valuation.RetentionBond;
 import io.github.rkaushikdev.chainageworks.valuation.RetentionTerms;
 import java.time.LocalDate;
@@ -41,6 +42,7 @@ import java.util.List;
  * @param paymentDays calendar days from the certificate to payment
  * @param substantialCompletionOn when the works were substantially complete
  * @param defectsCertificateOn when the defects certificate was issued
+ * @param interimTerms the terms on issuing interim certificates; none when null
  */
 public record JobSettingsInput(
         String id,
@@ -65,7 +67,8 @@ public record JobSettingsInput(
         Integer issueDays,
         Integer paymentDays,
         LocalDate substantialCompletionOn,
-        LocalDate defectsCertificateOn) {
+        LocalDate defectsCertificateOn,
+        InterimTerms interimTerms) {
 
     /** A job with every contract default. */
     public static JobSettingsInput of(String id, String name, Money contractSum) {
@@ -74,6 +77,7 @@ public record JobSettingsInput(
                 name,
                 null,
                 contractSum,
+                null,
                 null,
                 null,
                 null,
@@ -143,6 +147,12 @@ public record JobSettingsInput(
         return draft.input();
     }
 
+    public JobSettingsInput withInterimTerms(InterimTerms other) {
+        Draft draft = new Draft(this);
+        draft.interimTerms = other;
+        return draft.input();
+    }
+
     /** A copy of the input with one field changed, so each wither names only its own field. */
     private static final class Draft {
         private final String id;
@@ -168,6 +178,7 @@ public record JobSettingsInput(
         private Integer paymentDays;
         private LocalDate substantialCompletionOn;
         private final LocalDate defectsCertificateOn;
+        private InterimTerms interimTerms;
 
         private Draft(JobSettingsInput input) {
             id = input.id;
@@ -193,6 +204,7 @@ public record JobSettingsInput(
             paymentDays = input.paymentDays;
             substantialCompletionOn = input.substantialCompletionOn;
             defectsCertificateOn = input.defectsCertificateOn;
+            interimTerms = input.interimTerms;
         }
 
         private JobSettingsInput input() {
@@ -219,7 +231,8 @@ public record JobSettingsInput(
                     issueDays,
                     paymentDays,
                     substantialCompletionOn,
-                    defectsCertificateOn);
+                    defectsCertificateOn,
+                    interimTerms);
         }
     }
 }

@@ -32,6 +32,7 @@ import java.util.List;
  * @param completion the completion date and damages; null when the contract fixes none, and then
  *     nothing is ever deducted for lateness
  * @param delayEvents the delay events the completion date is extended by; null means none
+ * @param interimTerms the minimum certificate and the other issuing terms; null means none
  */
 public record CertificateInput(
         ProgressContext context,
@@ -47,19 +48,35 @@ public record CertificateInput(
         LocalDate substantialCompletionOn,
         LocalDate defectsCertificateOn,
         CompletionTerms completion,
-        List<DelayEvent> delayEvents) {
+        List<DelayEvent> delayEvents,
+        InterimTerms interimTerms) {
 
     public CertificateInput {
         materials = materials == null ? List.of() : List.copyOf(materials);
         dayworkSheets = dayworkSheets == null ? List.of() : List.copyOf(dayworkSheets);
         indices = indices == null ? List.of() : List.copyOf(indices);
         delayEvents = delayEvents == null ? List.of() : List.copyOf(delayEvents);
+        interimTerms = interimTerms == null ? InterimTerms.NONE : interimTerms;
     }
 
     /** A fixed price contract with no materials, no daywork and no bond. */
     public static CertificateInput of(ProgressContext context, Money contractSum, RetentionTerms retention) {
         return new CertificateInput(
-                context, contractSum, retention, null, null, null, null, null, null, null, null, null, null, null);
+                context,
+                contractSum,
+                retention,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     public CertificateInput withMaterials(List<MaterialsOnSite> other) {
@@ -116,6 +133,12 @@ public record CertificateInput(
         return draft.input();
     }
 
+    public CertificateInput withInterimTerms(InterimTerms other) {
+        Draft draft = new Draft(this);
+        draft.interimTerms = other;
+        return draft.input();
+    }
+
     /** A copy of the input with some parts changed, so each wither names only its own parts. */
     private static final class Draft {
         private final ProgressContext context;
@@ -132,6 +155,7 @@ public record CertificateInput(
         private LocalDate defectsCertificateOn;
         private CompletionTerms completion;
         private List<DelayEvent> delayEvents;
+        private InterimTerms interimTerms;
 
         private Draft(CertificateInput input) {
             context = input.context;
@@ -148,6 +172,7 @@ public record CertificateInput(
             defectsCertificateOn = input.defectsCertificateOn;
             completion = input.completion;
             delayEvents = input.delayEvents;
+            interimTerms = input.interimTerms;
         }
 
         private CertificateInput input() {
@@ -165,7 +190,8 @@ public record CertificateInput(
                     substantialCompletionOn,
                     defectsCertificateOn,
                     completion,
-                    delayEvents);
+                    delayEvents,
+                    interimTerms);
         }
     }
 }

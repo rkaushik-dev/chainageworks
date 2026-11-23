@@ -205,6 +205,7 @@ public final class Dto {
         dto.set("damages", money(certificate.damages()));
         dto.set("netValuation", money(certificate.netValuation()));
         dto.set("previouslyCertified", money(certificate.previouslyCertified()));
+        dto.put("heldOver", certificate.heldOver());
         dto.set("amountDue", money(certificate.amountDue()));
         dto.set("packages", array(certificate.earnings(), Dto::earning));
         return dto;

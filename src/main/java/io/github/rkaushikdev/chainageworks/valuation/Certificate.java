@@ -40,8 +40,11 @@ import java.util.Optional;
  *     contract fixes no completion date
  * @param netValuation the gross less the retention held and the damages, which is what has been
  *     certified to date
- * @param previouslyCertified the net figure the previous certificate reached
- * @param amountDue what this certificate pays: the net valuation less the previous figure
+ * @param previouslyCertified the figure the previous certificate certified to date
+ * @param heldOver true when the month moved the account by less than the minimum certificate, so
+ *     nothing is certified and the movement waits for the next month
+ * @param amountDue what this certificate pays: the net valuation less the previous figure, or
+ *     nothing when it is held over
  */
 public record Certificate(
         ValuationPeriod period,
@@ -59,6 +62,7 @@ public record Certificate(
         Money damages,
         Money netValuation,
         Money previouslyCertified,
+        boolean heldOver,
         Money amountDue) {
 
     public Certificate {
@@ -94,7 +98,7 @@ public record Certificate(
      */
     public static Certificate following(
             CertificateInput input, ValuationPeriod period, Optional<Certificate> previous) {
-        Money previouslyCertified = previous.map(Certificate::netValuation)
+        Money previouslyCertified = previous.map(Certificate::certifiedToDate)
                 .orElse(Money.zero(input.contractSum().currency()));
         return build(input, period, previouslyCertified, previous.map(Certificate::priceAdjustment));
     }
@@ -161,6 +165,8 @@ public record Certificate(
                 completion.map(standing -> damagesAt(input, standing, asAt)).orElse(Money.zero(currency));
         Money netValuation = gross.minus(retentionHeld).minus(damages);
 
+        Money due = netValuation.minus(previouslyCertified);
+        boolean heldOver = input.interimTerms().holdsOver(due);
         return new Certificate(
                 period,
                 input.context().billHistory().asAt(asAt).reference(),
@@ -177,7 +183,8 @@ public record Certificate(
                 damages,
                 netValuation,
                 previouslyCertified,
-                netValuation.minus(previouslyCertified));
+                heldOver,
+                heldOver ? Money.zero(currency) : due);
     }
 
     /**
@@ -210,9 +217,12 @@ public record Certificate(
         return amountDue.minor() < 0;
     }
 
-    /** What has been certified to date, which is the net valuation. */
+    /**
+     * What has been certified to date: the net valuation, or the previous figure again when this
+     * month is held over below the minimum.
+     */
     public Money certifiedToDate() {
-        return netValuation;
+        return heldOver ? previouslyCertified : netValuation;
     }
 
     /** True when the certificate rests on an index figure that may still move. */
@@ -273,6 +283,10 @@ public record Certificate(
         }
         lines.add(new Line("net valuation", netValuation, true));
         lines.add(new Line("less previously certified", previouslyCertified, false));
+        if (heldOver) {
+            lines.add(new Line(
+                    "held over below the minimum certificate", netValuation.minus(previouslyCertified), false));
+        }
         lines.add(new Line("amount due this certificate", amountDue, true));
         return List.copyOf(lines);
     }
@@ -280,6 +294,9 @@ public record Certificate(
     /** What the certificate warns about, in the order a reader meets it. */
     public List<String> notes() {
         List<String> notes = new ArrayList<>();
+        if (heldOver) {
+            notes.add("the movement is below the minimum certificate and is held over to next month");
+        }
         if (retention.capReached()) {
             notes.add("retention has reached its cap");
         }

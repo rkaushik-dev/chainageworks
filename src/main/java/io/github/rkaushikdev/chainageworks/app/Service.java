@@ -213,7 +213,8 @@ public final class Service {
                 settings.substantialCompletionOn().orElse(null),
                 settings.defectsCertificateOn().orElse(null),
                 settings.completion().orElse(null),
-                job.delayEvents().all());
+                job.delayEvents().all(),
+                settings.interimTerms());
     }
 
     /**
@@ -249,7 +250,7 @@ public final class Service {
         List<Certificate> series = certificateSeries(count);
         return CashFlow.build(new CashFlowInput(
                 series.stream().map(Certificate::period).toList(),
-                series.stream().map(Certificate::netValuation).toList(),
+                series.stream().map(Certificate::certifiedToDate).toList(),
                 job.settings().currency(),
                 latePeriods));
     }

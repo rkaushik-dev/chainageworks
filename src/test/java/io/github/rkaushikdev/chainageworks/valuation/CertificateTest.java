@@ -175,6 +175,52 @@ class CertificateTest {
     }
 
     @Nested
+    class TheMinimumCertificate {
+
+        private List<Certificate> seriesWithMinimum(double minimum) {
+            return Certificate.series(
+                    SCHEDULE.periods().subList(0, 4), BASE.withInterimTerms(InterimTerms.withMinimum(gbp(minimum))));
+        }
+
+        @Test
+        void holdsAMonthBelowTheMinimumOverAndPaysNothing() {
+            Certificate march = seriesWithMinimum(20_000).get(2);
+            assertThat(march.heldOver()).isTrue();
+            assertThat(march.netValuation().major()).isEqualTo(15_344.87);
+            assertThat(march.amountDue().minor()).isZero();
+            assertThat(march.certifiedToDate().minor()).isZero();
+            assertThat(march.lines())
+                    .contains(new Certificate.Line("held over below the minimum certificate", gbp(15_344.87), false));
+            assertThat(march.notes())
+                    .contains("the movement is below the minimum certificate and is held over to next month");
+        }
+
+        @Test
+        void carriesTheHeldMovementIntoTheNextMonth() {
+            Certificate april = seriesWithMinimum(20_000).get(3);
+            assertThat(april.previouslyCertified().minor()).isZero();
+            assertThat(april.heldOver()).isEqualTo(april.netValuation().major() < 20_000);
+            assertThat(april.amountDue()).isEqualTo(april.heldOver() ? gbp(0) : april.netValuation());
+        }
+
+        @Test
+        void certifiesAMonthThatClearsTheMinimum() {
+            List<Certificate> series = seriesWithMinimum(10_000);
+            assertThat(series.get(2).heldOver()).isFalse();
+            assertThat(series.get(2).amountDue().major()).isEqualTo(15_344.87);
+            assertThat(series.get(3).previouslyCertified().major()).isEqualTo(15_344.87);
+        }
+
+        @Test
+        void leavesAnUnrestrictedCertificateAlone() {
+            assertThat(CERTIFICATE.heldOver()).isFalse();
+            assertThat(CERTIFICATE.lines())
+                    .extracting(Certificate.Line::name)
+                    .doesNotContain("held over below the minimum certificate");
+        }
+    }
+
+    @Nested
     class TheAmountDueIsADifference {
 
         @Test

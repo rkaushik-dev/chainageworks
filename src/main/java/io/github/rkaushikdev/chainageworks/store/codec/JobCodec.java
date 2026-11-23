@@ -38,6 +38,7 @@ import io.github.rkaushikdev.chainageworks.store.JobSettings;
 import io.github.rkaushikdev.chainageworks.store.JobSettingsInput;
 import io.github.rkaushikdev.chainageworks.store.Repository;
 import io.github.rkaushikdev.chainageworks.util.Json;
+import io.github.rkaushikdev.chainageworks.valuation.InterimTerms;
 import io.github.rkaushikdev.chainageworks.valuation.RetentionTerms;
 import java.util.List;
 import java.util.function.Function;
@@ -282,6 +283,9 @@ public final class JobCodec {
         json.put("paymentDays", settings.paymentDays());
         json.set("substantialCompletionOn", optionalDateToJson(settings.substantialCompletionOn()));
         json.set("defectsCertificateOn", optionalDateToJson(settings.defectsCertificateOn()));
+        settings.interimTerms()
+                .minimumCertificate()
+                .ifPresent(minimum -> json.set("minimumCertificate", moneyToJson(minimum)));
         return json;
     }
 
@@ -334,6 +338,9 @@ public final class JobCodec {
                 wholeNumber(settings.path("issueDays"), "issue days"),
                 wholeNumber(settings.path("paymentDays"), "payment days"),
                 optionalDateFromJson(settings.path("substantialCompletionOn")).orElse(null),
-                optionalDateFromJson(settings.path("defectsCertificateOn")).orElse(null));
+                optionalDateFromJson(settings.path("defectsCertificateOn")).orElse(null),
+                optional(settings.path("minimumCertificate"), ValueCodec::moneyFromJson)
+                        .map(InterimTerms::withMinimum)
+                        .orElse(InterimTerms.NONE));
     }
 }
