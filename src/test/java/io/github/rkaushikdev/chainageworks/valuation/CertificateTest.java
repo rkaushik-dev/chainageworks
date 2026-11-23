@@ -221,6 +221,46 @@ class CertificateTest {
     }
 
     @Nested
+    class AnAdvancePayment {
+
+        @Test
+        void addsTheAdvanceAndDeductsNothingBelowTheThreshold() {
+            Certificate march = Certificate.build(
+                    BASE.withInterimTerms(InterimTerms.NONE.withAdvance(AdvancePayment.of(gbp(5000), d("2025-02-01")))),
+                    MARCH,
+                    Money.zero(Currency.GBP));
+            assertThat(march.advancePaid()).isEqualTo(gbp(5000));
+            assertThat(march.advanceRepaid().minor()).isZero();
+            assertThat(march.netValuation().major()).isEqualTo(20_344.87);
+            assertThat(march.lines())
+                    .contains(
+                            new Certificate.Line("advance payment", gbp(5000), false),
+                            new Certificate.Line("less advance repaid", gbp(0), false));
+        }
+
+        @Test
+        void takesTheAdvanceBackOnceTheGrossPassesTheThreshold() {
+            AdvancePayment quick = AdvancePayment.build(gbp(5000), d("2025-02-01"), Percent.of(0), Percent.of(100));
+            Certificate march = Certificate.build(
+                    BASE.withInterimTerms(InterimTerms.NONE.withAdvance(quick)), MARCH, Money.zero(Currency.GBP));
+            assertThat(march.advanceRepaid()).isEqualTo(gbp(5000));
+            assertThat(march.netValuation().major()).isEqualTo(15_344.87);
+            assertThat(march.notes()).contains("the advance payment has been repaid in full");
+        }
+
+        @Test
+        void leavesTheLinesOffUntilTheAdvanceIsPaid() {
+            Certificate march = Certificate.build(
+                    BASE.withInterimTerms(InterimTerms.NONE.withAdvance(AdvancePayment.of(gbp(5000), d("2025-04-01")))),
+                    MARCH,
+                    Money.zero(Currency.GBP));
+            assertThat(march.advancePaid().minor()).isZero();
+            assertThat(march.lines()).extracting(Certificate.Line::name).doesNotContain("advance payment");
+            assertThat(march.netValuation()).isEqualTo(CERTIFICATE.netValuation());
+        }
+    }
+
+    @Nested
     class TheAmountDueIsADifference {
 
         @Test

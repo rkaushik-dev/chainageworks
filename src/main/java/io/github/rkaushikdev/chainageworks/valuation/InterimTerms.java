@@ -13,14 +13,16 @@ import java.util.Optional;
  * next one rather than costing everybody a certificate for a few hundred pounds.
  *
  * @param minimumCertificate the smallest amount a certificate is issued for, empty for no minimum
+ * @param advance an advance payment the certificates repay, empty when none was made
  */
-public record InterimTerms(Optional<Money> minimumCertificate) {
+public record InterimTerms(Optional<Money> minimumCertificate, Optional<AdvancePayment> advance) {
 
-    /** No minimum: every month is certified, however little it moves. */
-    public static final InterimTerms NONE = new InterimTerms(Optional.empty());
+    /** No minimum and no advance: every month is certified, however little it moves. */
+    public static final InterimTerms NONE = new InterimTerms(Optional.empty(), Optional.empty());
 
     public InterimTerms {
         minimumCertificate = minimumCertificate == null ? Optional.empty() : minimumCertificate;
+        advance = advance == null ? Optional.empty() : advance;
     }
 
     /**
@@ -29,11 +31,25 @@ public record InterimTerms(Optional<Money> minimumCertificate) {
      * @throws BadInputException for a minimum below nothing
      */
     public static InterimTerms withMinimum(Money minimum) {
+        return NONE.andMinimum(minimum);
+    }
+
+    /**
+     * These terms with a minimum certificate.
+     *
+     * @throws BadInputException for a minimum below nothing
+     */
+    public InterimTerms andMinimum(Money minimum) {
         if (minimum.isNegative()) {
             throw new BadInputException(
                     "the minimum amount of a certificate cannot be negative", Details.of("minimum", minimum.format()));
         }
-        return new InterimTerms(Optional.of(minimum));
+        return new InterimTerms(Optional.of(minimum), advance);
+    }
+
+    /** These terms with an advance payment, or with none when {@code other} is null. */
+    public InterimTerms withAdvance(AdvancePayment other) {
+        return new InterimTerms(minimumCertificate, Optional.ofNullable(other));
     }
 
     /**

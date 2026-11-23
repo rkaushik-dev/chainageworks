@@ -31,6 +31,7 @@ import io.github.rkaushikdev.chainageworks.domain.variation.VariationStatus;
 import io.github.rkaushikdev.chainageworks.progress.PackageEarning;
 import io.github.rkaushikdev.chainageworks.store.Job;
 import io.github.rkaushikdev.chainageworks.util.Json;
+import io.github.rkaushikdev.chainageworks.valuation.AdvancePayment;
 import io.github.rkaushikdev.chainageworks.valuation.InterimTerms;
 import io.github.rkaushikdev.chainageworks.valuation.MaterialsInput;
 import io.github.rkaushikdev.chainageworks.valuation.MaterialsOnSite;
@@ -211,6 +212,26 @@ class JobCodecTest {
             assertThat(JobCodec.toJson(sampleJob()).path("settings").has("minimumCertificate"))
                     .isFalse();
             assertThat(through(sampleJob()).settings().interimTerms()).isEqualTo(InterimTerms.NONE);
+        }
+
+        @Test
+        void keepsTheAdvancePaymentAndItsRepaymentTerms() {
+            Job job = sampleJob();
+            AdvancePayment advance = AdvancePayment.build(
+                    Money.fromMajor(40_000, Currency.GBP), d("2025-01-20"), Percent.of(15), Percent.of(30));
+            job.setSettings(job.settings().withInterimTerms(InterimTerms.NONE.withAdvance(advance)));
+            Job again = through(job);
+            assertThat(again.settings().interimTerms().advance()).contains(advance);
+            assertThat(again.settings().interimTerms().minimumCertificate()).isEmpty();
+            ObjectNode doc = JobCodec.toJson(job);
+            ((ObjectNode) doc.path("settings").path("advancePayment")).remove("repaymentRate");
+            assertThat(JobCodec.fromJson(doc)
+                            .settings()
+                            .interimTerms()
+                            .advance()
+                            .orElseThrow()
+                            .repaymentRate())
+                    .isEqualTo(AdvancePayment.DEFAULT_REPAYMENT_RATE);
         }
 
         @Test

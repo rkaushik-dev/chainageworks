@@ -203,6 +203,8 @@ public final class Dto {
         dto.set("bond", orNull(certificate.bond(), Dto::bond));
         dto.set("retentionHeld", money(certificate.retentionHeld()));
         dto.set("damages", money(certificate.damages()));
+        dto.set("advancePaid", money(certificate.advancePaid()));
+        dto.set("advanceRepaid", money(certificate.advanceRepaid()));
         dto.set("netValuation", money(certificate.netValuation()));
         dto.set("previouslyCertified", money(certificate.previouslyCertified()));
         dto.put("heldOver", certificate.heldOver());

@@ -38,6 +38,7 @@ import io.github.rkaushikdev.chainageworks.store.JobSettings;
 import io.github.rkaushikdev.chainageworks.store.JobSettingsInput;
 import io.github.rkaushikdev.chainageworks.store.Repository;
 import io.github.rkaushikdev.chainageworks.util.Json;
+import io.github.rkaushikdev.chainageworks.valuation.AdvancePayment;
 import io.github.rkaushikdev.chainageworks.valuation.InterimTerms;
 import io.github.rkaushikdev.chainageworks.valuation.RetentionTerms;
 import java.util.List;
@@ -286,6 +287,13 @@ public final class JobCodec {
         settings.interimTerms()
                 .minimumCertificate()
                 .ifPresent(minimum -> json.set("minimumCertificate", moneyToJson(minimum)));
+        settings.interimTerms().advance().ifPresent(advance -> {
+            ObjectNode entry = json.putObject("advancePayment");
+            entry.set("amount", moneyToJson(advance.amount()));
+            entry.put("paidOn", dateToJson(advance.paidOn()));
+            entry.put("repaymentFrom", percentToJson(advance.repaymentFrom()));
+            entry.put("repaymentRate", percentToJson(advance.repaymentRate()));
+        });
         return json;
     }
 
@@ -339,8 +347,24 @@ public final class JobCodec {
                 wholeNumber(settings.path("paymentDays"), "payment days"),
                 optionalDateFromJson(settings.path("substantialCompletionOn")).orElse(null),
                 optionalDateFromJson(settings.path("defectsCertificateOn")).orElse(null),
-                optional(settings.path("minimumCertificate"), ValueCodec::moneyFromJson)
-                        .map(InterimTerms::withMinimum)
-                        .orElse(InterimTerms.NONE));
+                interimTermsFromJson(settings));
+    }
+
+    /** The minimum certificate and the advance payment, each absent from a job that has none. */
+    private static InterimTerms interimTermsFromJson(JsonNode settings) {
+        InterimTerms terms = optional(settings.path("minimumCertificate"), ValueCodec::moneyFromJson)
+                .map(InterimTerms::withMinimum)
+                .orElse(InterimTerms.NONE);
+        return terms.withAdvance(optional(settings.path("advancePayment"), value -> {
+                    JsonNode advance = objectFromJson(value, "advance payment");
+                    return AdvancePayment.build(
+                            moneyFromJson(advance.path("amount")),
+                            ValueCodec.dateFromJson(advance.path("paidOn")),
+                            optional(advance.path("repaymentFrom"), ValueCodec::percentFromJson)
+                                    .orElse(null),
+                            optional(advance.path("repaymentRate"), ValueCodec::percentFromJson)
+                                    .orElse(null));
+                })
+                .orElse(null));
     }
 }

@@ -36,7 +36,8 @@ class InterimTermsTest {
     @Test
     void holdsNothingWithoutAMinimum() {
         assertThat(InterimTerms.NONE.holdsOver(gbp(0.01))).isFalse();
-        assertThat(new InterimTerms(null).minimumCertificate()).isEmpty();
+        assertThat(new InterimTerms(null, null).minimumCertificate()).isEmpty();
+        assertThat(new InterimTerms(null, null).advance()).isEmpty();
     }
 
     @Test

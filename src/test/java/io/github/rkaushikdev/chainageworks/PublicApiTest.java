@@ -188,6 +188,7 @@ class PublicApiTest {
             "domain.subcontract.SubcontractInput",
             // what it is worth
             "valuation.BondPosition",
+            "valuation.AdvancePayment",
             "valuation.CashFlow",
             "valuation.CashFlowInput",
             "valuation.CashPoint",

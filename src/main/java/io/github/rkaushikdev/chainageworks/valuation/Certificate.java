@@ -38,8 +38,10 @@ import java.util.Optional;
  * @param retentionHeld the retention actually held in cash this month, after the bond
  * @param damages liquidated damages deducted to date, nothing when the job is not late or the
  *     contract fixes no completion date
- * @param netValuation the gross less the retention held and the damages, which is what has been
- *     certified to date
+ * @param advancePaid the advance payment standing on the account, nothing before it was paid
+ * @param advanceRepaid what the certificates have deducted towards repaying the advance to date
+ * @param netValuation the gross less the retention held and the damages, with the advance still
+ *     outstanding added back, which is what has been certified to date
  * @param previouslyCertified the figure the previous certificate certified to date
  * @param heldOver true when the month moved the account by less than the minimum certificate, so
  *     nothing is certified and the movement waits for the next month
@@ -60,6 +62,8 @@ public record Certificate(
         Optional<BondPosition> bond,
         Money retentionHeld,
         Money damages,
+        Money advancePaid,
+        Money advanceRepaid,
         Money netValuation,
         Money previouslyCertified,
         boolean heldOver,
@@ -163,7 +167,12 @@ public record Certificate(
         Money retentionHeld = position.map(BondPosition::shortfall).orElse(retention.held());
         Money damages =
                 completion.map(standing -> damagesAt(input, standing, asAt)).orElse(Money.zero(currency));
-        Money netValuation = gross.minus(retentionHeld).minus(damages);
+        Optional<AdvancePayment> advance = input.interimTerms().advance();
+        Money advancePaid = advance.map(a -> a.paidAt(asAt)).orElse(Money.zero(currency));
+        Money advanceRepaid =
+                advance.map(a -> a.repaidAt(gross, input.contractSum(), asAt)).orElse(Money.zero(currency));
+        Money netValuation =
+                gross.minus(retentionHeld).minus(damages).plus(advancePaid).minus(advanceRepaid);
 
         Money due = netValuation.minus(previouslyCertified);
         boolean heldOver = input.interimTerms().holdsOver(due);
@@ -181,6 +190,8 @@ public record Certificate(
                 position,
                 retentionHeld,
                 damages,
+                advancePaid,
+                advanceRepaid,
                 netValuation,
                 previouslyCertified,
                 heldOver,
@@ -281,6 +292,10 @@ public record Certificate(
         if (!damages.isZero()) {
             lines.add(new Line("less liquidated damages", damages, false));
         }
+        if (!advancePaid.isZero()) {
+            lines.add(new Line("advance payment", advancePaid, false));
+            lines.add(new Line("less advance repaid", advanceRepaid, false));
+        }
         lines.add(new Line("net valuation", netValuation, true));
         lines.add(new Line("less previously certified", previouslyCertified, false));
         if (heldOver) {
@@ -305,6 +320,9 @@ public record Certificate(
         }
         if (!damages.isZero()) {
             notes.add("liquidated damages are being deducted for late completion");
+        }
+        if (!advancePaid.isZero() && advanceRepaid.equals(advancePaid)) {
+            notes.add("the advance payment has been repaid in full");
         }
         if (priceAdjustment.heldAtCompletion()) {
             notes.add("the price adjustment is held at the completion date because the works are late");
