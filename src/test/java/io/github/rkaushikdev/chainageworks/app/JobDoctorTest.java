@@ -10,6 +10,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.rkaushikdev.chainageworks.config.Config;
+import io.github.rkaushikdev.chainageworks.domain.bill.ItemCode;
+import io.github.rkaushikdev.chainageworks.domain.daywork.DayworkRate;
+import io.github.rkaushikdev.chainageworks.domain.daywork.DayworkSchedule;
+import io.github.rkaushikdev.chainageworks.domain.daywork.DayworkScheduleInput;
+import io.github.rkaushikdev.chainageworks.domain.daywork.DayworkSheet;
+import io.github.rkaushikdev.chainageworks.domain.daywork.DayworkSheetInput;
+import io.github.rkaushikdev.chainageworks.domain.daywork.LabourEntry;
+import io.github.rkaushikdev.chainageworks.domain.daywork.PlantEntry;
 import io.github.rkaushikdev.chainageworks.domain.earthworks.HaulLink;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.AdjustmentTerms;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.Weighting;
@@ -18,8 +26,17 @@ import io.github.rkaushikdev.chainageworks.domain.itp.SignOffInput;
 import io.github.rkaushikdev.chainageworks.domain.money.Currency;
 import io.github.rkaushikdev.chainageworks.domain.money.Money;
 import io.github.rkaushikdev.chainageworks.domain.money.Percent;
+import io.github.rkaushikdev.chainageworks.domain.quantity.Quantity;
+import io.github.rkaushikdev.chainageworks.domain.quantity.Unit;
+import io.github.rkaushikdev.chainageworks.domain.risk.EarlyWarning;
+import io.github.rkaushikdev.chainageworks.domain.risk.EarlyWarningInput;
+import io.github.rkaushikdev.chainageworks.domain.risk.RiskOwner;
+import io.github.rkaushikdev.chainageworks.domain.risk.RiskState;
 import io.github.rkaushikdev.chainageworks.domain.subcontract.PaymentApplication;
 import io.github.rkaushikdev.chainageworks.domain.subcontract.PaymentNotice;
+import io.github.rkaushikdev.chainageworks.domain.survey.SurveyRecord;
+import io.github.rkaushikdev.chainageworks.domain.survey.SurveyRecordInput;
+import io.github.rkaushikdev.chainageworks.domain.survey.ToleranceSet;
 import io.github.rkaushikdev.chainageworks.http.ApiClient;
 import io.github.rkaushikdev.chainageworks.http.ApiClient.Answer;
 import io.github.rkaushikdev.chainageworks.progress.OutputAllowance;
@@ -27,6 +44,8 @@ import io.github.rkaushikdev.chainageworks.store.Job;
 import io.github.rkaushikdev.chainageworks.support.CliHarness;
 import io.github.rkaushikdev.chainageworks.support.CliHarness.Options;
 import io.github.rkaushikdev.chainageworks.support.CliHarness.Run;
+import io.github.rkaushikdev.chainageworks.valuation.MaterialsInput;
+import io.github.rkaushikdev.chainageworks.valuation.MaterialsOnSite;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
@@ -163,6 +182,155 @@ class JobDoctorTest {
             job.setSettings(job.settings().withOutputAllowances(List.of(new OutputAllowance("landscaping", 5))));
             assertThat(Doctor.diagnose(job).findingsIn("allowances").get(0).message())
                     .contains("never used");
+        }
+    }
+
+    @Nested
+    class MaterialsDayworkAndRisks {
+
+        @Test
+        void warnsAboutALotHeldOffSiteWithNoBond() {
+            Job job = sampleJob();
+            job.materials()
+                    .add(MaterialsOnSite.build(MaterialsInput.of(
+                                    "MOS-07",
+                                    "WP-02",
+                                    ItemCode.parse("E423.1"),
+                                    "precast units",
+                                    Quantity.of(12, Unit.NR),
+                                    Money.fromMajor(9000, Currency.GBP),
+                                    d("2025-03-10"))
+                            .withVestedOn(d("2025-03-12"))
+                            .withStoredOffSite("precast works", null)));
+            Diagnosis diagnosis = Doctor.diagnose(job);
+            assertThat(diagnosis.findingsIn("materials"))
+                    .extracting(Finding::message)
+                    .containsExactly("held at precast works with no bond, so it cannot be certified");
+            assertThat(diagnosis.errors()).isZero();
+        }
+
+        @Test
+        void isAnErrorForALotBookedToAnItemNoBillCarries() {
+            Job job = sampleJob();
+            job.materials()
+                    .add(MaterialsOnSite.build(MaterialsInput.of(
+                            "MOS-08",
+                            "WP-09",
+                            ItemCode.parse("Z999.1"),
+                            "stray lot",
+                            Quantity.of(1, Unit.NR),
+                            Money.fromMajor(10, Currency.GBP),
+                            d("2025-03-10"))));
+            assertThat(Doctor.diagnose(job).findingsIn("materials"))
+                    .extracting(Finding::message)
+                    .containsExactly("no package WP-09 is loaded", "Z999.1 is not in any bill revision");
+        }
+
+        @Test
+        void isAnErrorForADayworkSheetNamingARateTheScheduleLacks() {
+            Job job = sampleJob();
+            job.setSettings(job.settings()
+                    .withDaywork(DayworkSchedule.build(
+                            DayworkScheduleInput.of(List.of(DayworkRate.of("ganger", "ganger", 24)), List.of()))));
+            job.dayworkSheets()
+                    .add(DayworkSheet.build(new DayworkSheetInput(
+                            "DW-09",
+                            "DW/2025/090",
+                            "WP-01",
+                            "EI-090",
+                            d("2025-03-12"),
+                            null,
+                            "",
+                            List.of(new LabourEntry("foreman", 1, 8, 0)),
+                            List.of(new PlantEntry("crane-50t", 2, 0)),
+                            List.of())));
+            Diagnosis diagnosis = Doctor.diagnose(job);
+            assertThat(diagnosis.findingsIn("daywork"))
+                    .extracting(Finding::message)
+                    .containsExactly(
+                            "the schedule has no labour rate foreman", "the schedule has no plant rate crane-50t");
+            assertThat(diagnosis.isHealthy()).isFalse();
+        }
+
+        @Test
+        void warnsThatASheetIsNeverValuedWithoutASchedule() {
+            Job job = sampleJob();
+            job.dayworkSheets()
+                    .add(DayworkSheet.build(new DayworkSheetInput(
+                            "DW-10",
+                            "DW/2025/091",
+                            "WP-01",
+                            "EI-091",
+                            d("2025-03-12"),
+                            null,
+                            "",
+                            List.of(new LabourEntry("ganger", 1, 8, 0)),
+                            List.of(),
+                            List.of())));
+            assertThat(Doctor.diagnose(job).findingsIn("daywork").get(0).message())
+                    .contains("never valued");
+        }
+
+        @Test
+        void warnsAboutAHappenedRiskStillWaitingOnAQuotation() {
+            Job job = sampleJob();
+            job.earlyWarnings()
+                    .add(EarlyWarning.build(EarlyWarningInput.of(
+                                    "EW-30",
+                                    "rock at formation",
+                                    RiskOwner.EMPLOYER,
+                                    d("2025-02-10"),
+                                    Money.fromMajor(5000, Currency.GBP))
+                            .withState(RiskState.HAPPENED)));
+            assertThat(Doctor.diagnose(job).findingsIn("risks"))
+                    .extracting(Finding::subject)
+                    .containsExactly("EW-30");
+        }
+
+        @Test
+        void checksARecordsStepAgainstItsOwnPackagesRuleOfCredit() {
+            Job job = sampleJob();
+            SurveyRecord any = job.records().all().get(0);
+            String foreign = job.profiles().all().stream()
+                    .filter(profile -> !profile.id()
+                            .equals(job.packages().require(any.packageId()).profileId()))
+                    .flatMap(profile -> profile.steps().stream())
+                    .map(step -> step.id())
+                    .filter(id -> job.profiles()
+                            .require(job.packages().require(any.packageId()).profileId())
+                            .findStep(id)
+                            .isEmpty())
+                    .findFirst()
+                    .orElseThrow();
+            job.records()
+                    .put(SurveyRecord.build(new SurveyRecordInput(
+                            "SR-X1",
+                            any.packageId(),
+                            any.code(),
+                            foreign,
+                            any.extent(),
+                            any.quantity(),
+                            any.measuredOn(),
+                            "A Surveyor",
+                            null,
+                            null,
+                            null)));
+            assertThat(Doctor.diagnose(job).findingsIn("records"))
+                    .extracting(Finding::message)
+                    .containsExactly("the package's rule of credit has no step " + foreign);
+        }
+
+        @Test
+        void warnsAboutAToleranceHeadingNoItemFallsUnder() {
+            Job job = sampleJob();
+            job.setSettings(job.settings()
+                    .withTolerances(ToleranceSet.build(List.of(
+                            ToleranceSet.Rule.fallback(Percent.of(2.5)),
+                            ToleranceSet.Rule.forHeading(ItemCode.parse("E42"), Percent.of(20)),
+                            ToleranceSet.Rule.forHeading(ItemCode.parse("E99"), Percent.of(20))))));
+            assertThat(Doctor.diagnose(job).findingsIn("tolerances"))
+                    .extracting(Finding::subject)
+                    .containsExactly("E99");
         }
     }
 
