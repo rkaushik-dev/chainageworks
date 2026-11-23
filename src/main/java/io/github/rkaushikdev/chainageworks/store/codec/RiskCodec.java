@@ -56,6 +56,7 @@ final class RiskCodec {
         json.set("costIfItHappens", moneyToJson(warning.costIfItHappens()));
         json.put("likelihood", percentToJson(warning.likelihood()));
         json.put("delayDays", warning.delayDays());
+        warning.quotation().ifPresent(quoted -> json.set("quotation", moneyToJson(quoted)));
         return json;
     }
 
@@ -73,6 +74,7 @@ final class RiskCodec {
                 optionalDateFromJson(raw.path("closedOn")).orElse(null),
                 moneyFromJson(raw.path("costIfItHappens")),
                 percentFromJson(raw.path("likelihood")),
-                wholeNumber(raw.path("delayDays"), "delay days", 0)));
+                wholeNumber(raw.path("delayDays"), "delay days", 0),
+                optional(raw.path("quotation"), ValueCodec::moneyFromJson).orElse(null)));
     }
 }

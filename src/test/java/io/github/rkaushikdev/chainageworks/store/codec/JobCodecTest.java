@@ -24,6 +24,10 @@ import io.github.rkaushikdev.chainageworks.domain.money.Percent;
 import io.github.rkaushikdev.chainageworks.domain.money.Rate;
 import io.github.rkaushikdev.chainageworks.domain.quantity.Quantity;
 import io.github.rkaushikdev.chainageworks.domain.quantity.Unit;
+import io.github.rkaushikdev.chainageworks.domain.risk.EarlyWarning;
+import io.github.rkaushikdev.chainageworks.domain.risk.EarlyWarningInput;
+import io.github.rkaushikdev.chainageworks.domain.risk.RiskOwner;
+import io.github.rkaushikdev.chainageworks.domain.risk.RiskState;
 import io.github.rkaushikdev.chainageworks.domain.survey.ToleranceSet;
 import io.github.rkaushikdev.chainageworks.domain.time.Standdown;
 import io.github.rkaushikdev.chainageworks.domain.time.StanddownReason;
@@ -278,6 +282,23 @@ class JobCodecTest {
             assertThat(written.get(2).path("heading").asText()).isEqualTo("E42");
             assertThat(through(job).settings().tolerances().allowanceFor(ItemCode.parse("E423.1")))
                     .isEqualTo(Percent.of(20));
+        }
+
+        @Test
+        void keepsTheQuotationOnARiskThatHappened() {
+            Job job = sampleJob();
+            job.earlyWarnings()
+                    .add(EarlyWarning.build(EarlyWarningInput.of(
+                                    "EW-09",
+                                    "rock at formation",
+                                    RiskOwner.EMPLOYER,
+                                    d("2025-02-10"),
+                                    Money.fromMajor(30_000, Currency.GBP))
+                            .withState(RiskState.HAPPENED)
+                            .withQuotation(Money.fromMajor(26_250, Currency.GBP))));
+            EarlyWarning again = through(job).earlyWarnings().require("EW-09");
+            assertThat(again.quotation()).contains(Money.fromMajor(26_250, Currency.GBP));
+            assertThat(again.expectedCost()).isEqualTo(Money.fromMajor(26_250, Currency.GBP));
         }
 
         @Test

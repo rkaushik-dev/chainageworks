@@ -29,6 +29,8 @@ import java.util.Optional;
  * @param costIfItHappens what it costs if it happens, before any weighting
  * @param likelihood how likely it is
  * @param delayDays working days it would add to the programme
+ * @param quotation what the compensation event was quoted at once the risk happened, which
+ *     replaces the estimate made when it was only a risk
  */
 public record EarlyWarning(
         String id,
@@ -42,7 +44,8 @@ public record EarlyWarning(
         Optional<LocalDate> closedOn,
         Money costIfItHappens,
         Percent likelihood,
-        int delayDays) {
+        int delayDays,
+        Optional<Money> quotation) {
 
     /** Days from raising a warning to the meeting the contract wants. */
     public static final int DEFAULT_MEETING_DAYS = 14;
@@ -51,6 +54,7 @@ public record EarlyWarning(
         extent = extent == null ? Optional.empty() : extent;
         meetingOn = meetingOn == null ? Optional.empty() : meetingOn;
         closedOn = closedOn == null ? Optional.empty() : closedOn;
+        quotation = quotation == null ? Optional.empty() : quotation;
     }
 
     /**
@@ -106,6 +110,21 @@ public record EarlyWarning(
                     "a delay is a whole number of working days",
                     Details.of("warning", input.id(), "delayDays", delayDays));
         }
+        RiskState state = input.state() == null ? RiskState.OPEN : input.state();
+        Optional<Money> quotation = Optional.ofNullable(input.quotation());
+        if (quotation.isPresent() && state != RiskState.HAPPENED) {
+            throw new BadInputException(
+                    "only a risk that happened can be quoted as a compensation event",
+                    Details.of("warning", input.id(), "state", state.wire()));
+        }
+        if (quotation.isPresent() && quotation.get().minor() < 0) {
+            throw new BadInputException("a quotation cannot be less than nothing", Details.of("warning", input.id()));
+        }
+        if (quotation.isPresent()
+                && quotation.get().currency() != input.costIfItHappens().currency()) {
+            throw new BadInputException(
+                    "a quotation is in another currency from the risk", Details.of("warning", input.id()));
+        }
         Optional<LocalDate> closedOn = Optional.ofNullable(input.closedOn());
         if (closedOn.isPresent() && closedOn.get().isBefore(input.raisedOn())) {
             throw new BadInputException(
@@ -116,14 +135,15 @@ public record EarlyWarning(
                 input.reference() == null ? input.id() : input.reference(),
                 Text.trim(input.description()),
                 input.owner(),
-                input.state() == null ? RiskState.OPEN : input.state(),
+                state,
                 Optional.ofNullable(input.extent()),
                 input.raisedOn(),
                 Optional.ofNullable(input.meetingOn()),
                 closedOn,
                 input.costIfItHappens(),
                 likelihood,
-                delayDays);
+                delayDays,
+                quotation);
     }
 
     /** Raised by {@code asAt} and not closed on that day. */
@@ -149,15 +169,26 @@ public record EarlyWarning(
         return meetingOverdue(asAt, DEFAULT_MEETING_DAYS);
     }
 
-    /** The cost weighted by how likely it is, which is what a forecast carries. */
+    /**
+     * The cost weighted by how likely it is, which is what a forecast carries. A risk that happened
+     * is carried in full, at its quotation once it has one.
+     */
     public Money expectedCost() {
-        if (state == RiskState.AVOIDED) {
-            return Money.zero(costIfItHappens.currency());
-        }
-        if (state == RiskState.HAPPENED) {
-            return costIfItHappens;
-        }
-        return costIfItHappens.scale(likelihood.fraction());
+        return switch (state) {
+            case AVOIDED -> Money.zero(costIfItHappens.currency());
+            case HAPPENED -> fullCost();
+            case OPEN, MITIGATED -> costIfItHappens.scale(likelihood.fraction());
+        };
+    }
+
+    /** What the risk costs at full value: the quotation once it has one, the estimate until then. */
+    public Money fullCost() {
+        return quotation.orElse(costIfItHappens);
+    }
+
+    /** True for a risk that happened and has not been quoted yet, which is the next thing to chase. */
+    public boolean awaitsQuotation() {
+        return state == RiskState.HAPPENED && quotation.isEmpty();
     }
 
     private double contractorShare() {
@@ -193,7 +224,7 @@ public record EarlyWarning(
                 asAt,
                 open,
                 Money.sum(open.stream().map(EarlyWarning::expectedCost).toList(), currency),
-                Money.sum(open.stream().map(EarlyWarning::costIfItHappens).toList(), currency),
+                Money.sum(open.stream().map(EarlyWarning::fullCost).toList(), currency),
                 Money.sum(
                         open.stream()
                                 .map(w -> w.expectedCost().scale(w.contractorShare()))

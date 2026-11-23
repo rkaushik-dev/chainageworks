@@ -704,6 +704,12 @@ public final class Dto {
         dto.set(
                 "unowned",
                 strings(position.unowned().stream().map(EarlyWarning::id).toList()));
+        dto.set(
+                "awaitingQuotation",
+                strings(position.open().stream()
+                        .filter(EarlyWarning::awaitsQuotation)
+                        .map(EarlyWarning::id)
+                        .toList()));
         dto.set("warnings", array(position.open(), warning -> {
             ObjectNode entry = Json.object();
             entry.put("id", warning.id());

@@ -164,6 +164,55 @@ class EarlyWarningTest {
     }
 
     @Nested
+    class Quotation {
+
+        private final EarlyWarning happened = EarlyWarning.build(
+                EarlyWarningInput.from(UTILITIES).withState(RiskState.HAPPENED).withQuotation(gbp(48_500)));
+
+        @Test
+        void replacesTheEstimateOnceTheCompensationEventIsQuoted() {
+            assertThat(happened.expectedCost()).isEqualTo(gbp(48_500));
+            assertThat(happened.fullCost()).isEqualTo(gbp(48_500));
+            assertThat(happened.costIfItHappens()).isEqualTo(gbp(60_000));
+            assertThat(happened.awaitsQuotation()).isFalse();
+        }
+
+        @Test
+        void carriesTheEstimateUntilAQuotationArrives() {
+            EarlyWarning unquoted =
+                    EarlyWarning.build(EarlyWarningInput.from(UTILITIES).withState(RiskState.HAPPENED));
+            assertThat(unquoted.expectedCost()).isEqualTo(gbp(60_000));
+            assertThat(unquoted.awaitsQuotation()).isTrue();
+            assertThat(UTILITIES.awaitsQuotation()).isFalse();
+        }
+
+        @Test
+        void refusesAQuotationForARiskThatHasNotHappened() {
+            assertThatThrownBy(() ->
+                            EarlyWarning.build(EarlyWarningInput.from(UTILITIES).withQuotation(gbp(1000))))
+                    .hasMessageContaining("only a risk that happened");
+        }
+
+        @Test
+        void refusesANegativeQuotationOrOneInAnotherCurrency() {
+            EarlyWarningInput happenedInput = EarlyWarningInput.from(UTILITIES).withState(RiskState.HAPPENED);
+            assertThatThrownBy(() -> EarlyWarning.build(happenedInput.withQuotation(gbp(-1))))
+                    .hasMessageContaining("less than nothing");
+            assertThatThrownBy(
+                            () -> EarlyWarning.build(happenedInput.withQuotation(Money.fromMajor(1000, Currency.EUR))))
+                    .hasMessageContaining("another currency");
+        }
+
+        @Test
+        void putsTheQuotationIntoTheWorstCaseAsWellAsTheExpected() {
+            EarlyWarning.Position position = EarlyWarning.position(List.of(happened), d("2025-03-31"), Currency.GBP);
+            assertThat(position.expected()).isEqualTo(gbp(48_500));
+            assertThat(position.worstCase()).isEqualTo(gbp(48_500));
+            assertThat(position.carried().minor()).isZero();
+        }
+    }
+
+    @Nested
     class MeetingOverdue {
 
         @Test
