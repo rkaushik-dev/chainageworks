@@ -129,6 +129,45 @@ class AdjustmentTermsTest {
     }
 
     @Nested
+    class IndexLag {
+
+        private final AdjustmentTerms lagged = TERMS.withLagMonths(2);
+
+        @Test
+        void readsTheCurrentFiguresTheLagBackFromTheValuation() {
+            assertThat(lagged.indicesReadAt(d("2025-03-25"))).isEqualTo(d("2025-01-25"));
+            AdjustmentFactor factor = lagged.factorAt(SERIES, d("2025-03-25"));
+            assertThat(factor.asAt()).isEqualTo(d("2025-03-25"));
+            assertThat(factor.indicesReadAt()).isEqualTo(d("2025-01-25"));
+            assertThat(factor.factor())
+                    .isCloseTo(TERMS.factorAt(SERIES, d("2025-01-25")).factor(), byLessThan(5e-11));
+        }
+
+        @Test
+        void keepsAProvisionalFigureOutOfAFactorThatNoLongerReadsIt() {
+            assertThat(TERMS.factorAt(SERIES, d("2025-03-25")).provisional()).isTrue();
+            assertThat(lagged.factorAt(SERIES, d("2025-03-25")).provisional()).isFalse();
+        }
+
+        @Test
+        void movesNothingWhileTheLagStillReachesBackPastTheBaseDate() {
+            assertThat(lagged.indicesReadAt(d("2024-11-25"))).isEqualTo(d("2024-10-25"));
+            assertThat(lagged.factorAt(SERIES, d("2024-11-25")).factor()).isZero();
+        }
+
+        @Test
+        void readsTheValuationMonthItselfWithNoLag() {
+            assertThat(TERMS.lagMonths()).isZero();
+            assertThat(TERMS.indicesReadAt(d("2025-03-25"))).isEqualTo(d("2025-03-25"));
+        }
+
+        @Test
+        void refusesALagThatRunsForwards() {
+            assertThatThrownBy(() -> TERMS.withLagMonths(-1)).hasMessageContaining("index lag");
+        }
+    }
+
+    @Nested
     class Adjust {
 
         @Test

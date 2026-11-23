@@ -11,6 +11,7 @@ import io.github.rkaushikdev.chainageworks.config.Config;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.AdjustmentFactor;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.AdjustmentTerms;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.IndexSeries;
+import io.github.rkaushikdev.chainageworks.domain.time.SiteDates;
 import io.github.rkaushikdev.chainageworks.http.ApiClient;
 import io.github.rkaushikdev.chainageworks.ingest.ImportReport;
 import io.github.rkaushikdev.chainageworks.reporting.format.PlainText;
@@ -201,6 +202,24 @@ class FluctuationsTest {
             Certificate reloaded = new Service(again, Config.DEFAULT).certificateFor(3);
             assertThat(reloaded.gross().major())
                     .isEqualTo(fluctuating().certificateFor(3).gross().major());
+        }
+
+        @Test
+        void keepsTheIndexLagAndValuesAgainstTheEarlierMonth() {
+            Job lagged = fluctuatingJob();
+            AdjustmentTerms terms = lagged.settings().adjustment().orElseThrow();
+            lagged.setSettings(lagged.settings().withAdjustment(terms.withLagMonths(1)));
+            Job again = JobDocuments.throughText(lagged);
+            assertThat(again.settings().adjustment().orElseThrow().lagMonths()).isEqualTo(1);
+            Certificate certificate = new Service(again, Config.DEFAULT).certificateFor(3);
+            assertThat(certificate.priceAdjustment().factor().indicesReadAt())
+                    .isEqualTo(SiteDates.addMonths(certificate.period().cutOff(), -1));
+            assertThat(JobDocuments.throughText(fluctuatingJob())
+                            .settings()
+                            .adjustment()
+                            .orElseThrow()
+                            .lagMonths())
+                    .isZero();
         }
 
         @Test

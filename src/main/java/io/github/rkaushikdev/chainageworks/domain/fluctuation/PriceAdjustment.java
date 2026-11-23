@@ -24,7 +24,7 @@ public record PriceAdjustment(
                 asAt,
                 base,
                 Money.zero(base.currency()),
-                new AdjustmentFactor(asAt, List.of(), 0, false),
+                new AdjustmentFactor(asAt, asAt, List.of(), 0, false),
                 Money.zero(base.currency()),
                 false);
     }

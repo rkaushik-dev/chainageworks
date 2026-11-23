@@ -70,6 +70,9 @@ final class FluctuationCodec {
             entry.put("weight", percentToJson(weighting.weight()));
             return entry;
         }));
+        if (terms.lagMonths() > 0) {
+            json.put("lagMonths", terms.lagMonths());
+        }
         return json;
     }
 
@@ -88,6 +91,7 @@ final class FluctuationCodec {
                     return new Weighting(
                             needString(weighting.path("indexId"), "index id"),
                             percentFromJson(weighting.path("weight")));
-                }));
+                }),
+                wholeNumber(raw.path("lagMonths"), "index lag", 0));
     }
 }

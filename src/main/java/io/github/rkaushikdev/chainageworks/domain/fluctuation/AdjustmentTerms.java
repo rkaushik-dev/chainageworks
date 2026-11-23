@@ -4,6 +4,7 @@ import io.github.rkaushikdev.chainageworks.BadInputException;
 import io.github.rkaushikdev.chainageworks.Details;
 import io.github.rkaushikdev.chainageworks.domain.money.Money;
 import io.github.rkaushikdev.chainageworks.domain.money.Percent;
+import io.github.rkaushikdev.chainageworks.domain.time.SiteDates;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
@@ -15,8 +16,11 @@ import java.util.Set;
  * @param baseDate the month the tender was priced in, which every index is read against
  * @param nonAdjustable the share of the price that never moves, however the indices do
  * @param weightings the indices and their shares
+ * @param lagMonths how many months the current figures trail the valuation by. Most clauses read
+ *     the index for a month or two before the one being valued, because that is the newest figure
+ *     anybody can have when the certificate is due
  */
-public record AdjustmentTerms(LocalDate baseDate, Percent nonAdjustable, List<Weighting> weightings) {
+public record AdjustmentTerms(LocalDate baseDate, Percent nonAdjustable, List<Weighting> weightings, int lagMonths) {
 
     public AdjustmentTerms {
         weightings = List.copyOf(weightings);
@@ -32,6 +36,20 @@ public record AdjustmentTerms(LocalDate baseDate, Percent nonAdjustable, List<We
      * @param nonAdjustable the fixed element, or null for none
      */
     public static AdjustmentTerms build(LocalDate baseDate, Percent nonAdjustable, List<Weighting> weightings) {
+        return build(baseDate, nonAdjustable, weightings, 0);
+    }
+
+    /**
+     * Build the terms with the current figures read {@code lagMonths} months behind the valuation.
+     *
+     * @throws BadInputException for a negative lag, besides everything the shorter form refuses
+     */
+    public static AdjustmentTerms build(
+            LocalDate baseDate, Percent nonAdjustable, List<Weighting> weightings, int lagMonths) {
+        if (lagMonths < 0) {
+            throw new BadInputException(
+                    "an index lag is a whole number of months back", Details.of("lagMonths", lagMonths));
+        }
         Percent fixed = nonAdjustable == null ? Percent.of(0) : nonAdjustable;
         Set<String> seen = new HashSet<>();
         long total = fixed.basisPoints();
@@ -50,7 +68,7 @@ public record AdjustmentTerms(LocalDate baseDate, Percent nonAdjustable, List<We
             throw new BadInputException(
                     "the weightings and the fixed element have to come to 100", Details.of("total", total / 100.0));
         }
-        return new AdjustmentTerms(baseDate, fixed, weightings);
+        return new AdjustmentTerms(baseDate, fixed, weightings, lagMonths);
     }
 
     /**
@@ -61,23 +79,37 @@ public record AdjustmentTerms(LocalDate baseDate, Percent nonAdjustable, List<We
      * up as a factor that is quietly too small when a weighting is missing.
      */
     public AdjustmentFactor factorAt(List<IndexSeries> series, LocalDate asAt) {
+        LocalDate readAt = indicesReadAt(asAt);
         List<AdjustmentFactor.Line> lines = weightings.stream()
                 .map(weighting -> {
                     IndexSeries found = IndexSeries.require(series, weighting.indexId());
-                    double movement = found.movementSince(baseDate, asAt);
+                    double movement = found.movementSince(baseDate, readAt);
                     return new AdjustmentFactor.Line(
                             weighting.indexId(),
                             weighting.weight(),
                             movement,
                             weighting.weight().fraction() * movement,
-                            found.isProvisionalAt(asAt) || found.isProvisionalAt(baseDate));
+                            found.isProvisionalAt(readAt) || found.isProvisionalAt(baseDate));
                 })
                 .toList();
-        double factor = 0;
-        for (AdjustmentFactor.Line line : lines) {
-            factor += line.contribution();
-        }
-        return new AdjustmentFactor(asAt, lines, factor, lines.stream().anyMatch(AdjustmentFactor.Line::provisional));
+        double factor =
+                lines.stream().mapToDouble(AdjustmentFactor.Line::contribution).sum();
+        return new AdjustmentFactor(
+                asAt, readAt, lines, factor, lines.stream().anyMatch(AdjustmentFactor.Line::provisional));
+    }
+
+    /**
+     * The date the current figures are read for at a valuation: the lag back from it, and never
+     * earlier than the base date. A valuation that falls inside the lag of the base date has not
+     * moved at all yet, which is what the clause means, not an index read before the tender.
+     */
+    public LocalDate indicesReadAt(LocalDate asAt) {
+        return SiteDates.max(SiteDates.addMonths(asAt, -lagMonths), baseDate);
+    }
+
+    /** The same clause with the current figures read {@code months} back. */
+    public AdjustmentTerms withLagMonths(int months) {
+        return build(baseDate, nonAdjustable, weightings, months);
     }
 
     /**

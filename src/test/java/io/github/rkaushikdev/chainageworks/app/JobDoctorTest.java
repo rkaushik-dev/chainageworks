@@ -130,7 +130,8 @@ class JobDoctorTest {
                     .withAdjustment(new AdjustmentTerms(
                             d("2024-10-25"),
                             Percent.ofBasisPoints(0),
-                            List.of(new Weighting("IDX-MISSING", Percent.ofBasisPoints(10_000))))));
+                            List.of(new Weighting("IDX-MISSING", Percent.ofBasisPoints(10_000))),
+                            0)));
             Diagnosis diagnosis = Doctor.diagnose(job);
             assertThat(diagnosis.findingsIn("fluctuations").get(0).message()).contains("no certificate");
             assertThat(diagnosis.isHealthy()).isFalse();

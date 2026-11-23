@@ -9,11 +9,14 @@ import java.util.List;
  * The price adjustment factor at a date, and how each index contributed to it.
  *
  * @param asAt the date it was worked out for
+ * @param indicesReadAt the date the current figures were read for, which trails the valuation by
+ *     the lag the clause names
  * @param lines one line per weighted index
  * @param factor the price adjustment factor, as a fraction of the adjustable value
  * @param provisional true while any contributing figure is still provisional
  */
-public record AdjustmentFactor(LocalDate asAt, List<Line> lines, double factor, boolean provisional) {
+public record AdjustmentFactor(
+        LocalDate asAt, LocalDate indicesReadAt, List<Line> lines, double factor, boolean provisional) {
 
     public AdjustmentFactor {
         lines = List.copyOf(lines);
