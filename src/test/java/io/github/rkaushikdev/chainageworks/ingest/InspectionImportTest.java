@@ -52,6 +52,25 @@ class InspectionImportTest {
         }
 
         @Test
+        void readsANoticeAndAnInspectionNobodyAttended() {
+            ImportReport<SignOff> report = InspectionImport.importSignOffs(sheet(
+                    SIGN_HEADER + ",outcome,notice given",
+                    "SO-02,IP-E1,WP-01,12+000,12+400,2025-03-12,C Agent,not attended,2025-03-10"));
+            SignOff signOff = report.imported().get(0);
+            assertThat(signOff.outcome()).isEqualTo(SignOffOutcome.NOT_ATTENDED);
+            assertThat(signOff.noticeGivenOn()).contains(SiteDates.parse("2025-03-10"));
+            assertThat(signOff.isDeemed()).isTrue();
+        }
+
+        @Test
+        void rejectsANonAttendanceWithNoNotice() {
+            ImportReport<SignOff> report = InspectionImport.importSignOffs(
+                    sheet(SIGN_HEADER + ",outcome", "SO-03,IP-E1,WP-01,12+000,12+400,2025-03-12,C Agent,not attended"));
+            assertThat(report.hasErrors()).isTrue();
+            assertThat(report.errors().get(0).message()).contains("never told about");
+        }
+
+        @Test
         void rejectsAnOutcomeItDoesNotKnow() {
             ImportReport<SignOff> report = InspectionImport.importSignOffs(
                     sheet(SIGN_HEADER + ",outcome", "SO-01,IP-E1,WP-01,12+000,12+400,2025-03-12,R Engineer,maybe"));

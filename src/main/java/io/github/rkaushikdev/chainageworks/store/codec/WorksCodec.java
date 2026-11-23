@@ -297,6 +297,7 @@ final class WorksCodec {
         json.put("by", signOff.by());
         json.put("outcome", signOff.outcome().wire());
         json.put("note", signOff.note());
+        signOff.noticeGivenOn().ifPresent(on -> json.put("noticeGivenOn", dateToJson(on)));
         return json;
     }
 
@@ -310,7 +311,8 @@ final class WorksCodec {
                 dateFromJson(raw.path("signedOn")),
                 needString(raw.path("by"), "signatory"),
                 known(orElse(raw.path("outcome"), "passed"), "sign off outcome", SignOffOutcome::fromWire),
-                optionalString(raw.path("note"))));
+                optionalString(raw.path("note")),
+                optionalDateFromJson(raw.path("noticeGivenOn")).orElse(null)));
     }
 
     static ObjectNode ncrToJson(Ncr ncr) {

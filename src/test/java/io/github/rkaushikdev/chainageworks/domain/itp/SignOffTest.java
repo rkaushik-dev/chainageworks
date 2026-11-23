@@ -87,6 +87,53 @@ class SignOffTest {
     }
 
     @Nested
+    class NobodyAttended {
+
+        private SignOff unattended(String noticeOn, String inspectedOn) {
+            return SignOff.build(SignOffInput.of("S9", "IP-01", "WP-01", EXTENT, d(inspectedOn), "C Agent")
+                    .withOutcome(SignOffOutcome.NOT_ATTENDED)
+                    .withNoticeGivenOn(d(noticeOn)));
+        }
+
+        @Test
+        void releasesTheWorkWhenNoticeWasGivenInTime() {
+            SignOff deemed = unattended("2025-03-07", "2025-03-10");
+            assertThat(deemed.releases()).isTrue();
+            assertThat(deemed.isDeemed()).isTrue();
+            assertThat(gate("excavate", List.of(deemed)).state()).isEqualTo(GateState.OPEN);
+        }
+
+        @Test
+        void holdsTheWorkWhenTheNoticeCameOnTheDayItself() {
+            SignOff sameDay = unattended("2025-03-10", "2025-03-10");
+            assertThat(sameDay.releases()).isFalse();
+            assertThat(sameDay.isDeemed()).isFalse();
+            assertThat(gate("excavate", List.of(sameDay)).state()).isEqualTo(GateState.HELD);
+        }
+
+        @Test
+        void refusesARecordOfNonAttendanceWithNoNoticeBehindIt() {
+            assertThatThrownBy(() ->
+                            SignOff.build(SignOffInput.of("S9", "IP-01", "WP-01", EXTENT, d("2025-03-10"), "C Agent")
+                                    .withOutcome(SignOffOutcome.NOT_ATTENDED)))
+                    .hasMessageContaining("never told about");
+        }
+
+        @Test
+        void refusesNoticeGivenAfterTheInspection() {
+            assertThatThrownBy(() -> unattended("2025-03-12", "2025-03-10"))
+                    .hasMessageContaining("cannot come after it");
+        }
+
+        @Test
+        void keepsAnOrdinaryInspectionFromCountingAsDeemed() {
+            SignOff passed = sign("S1", "IP-01", "12+000", "12+800", "2025-03-10");
+            assertThat(passed.isDeemed()).isFalse();
+            assertThat(passed.noticeGivenOn()).isEmpty();
+        }
+    }
+
+    @Nested
     class ForStep {
 
         @Test

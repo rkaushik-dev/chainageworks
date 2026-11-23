@@ -7,6 +7,7 @@ import io.github.rkaushikdev.chainageworks.domain.itp.SignOff;
 import io.github.rkaushikdev.chainageworks.domain.itp.SignOffInput;
 import io.github.rkaushikdev.chainageworks.domain.itp.SignOffOutcome;
 import io.github.rkaushikdev.chainageworks.io.Csv;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -51,7 +52,9 @@ public final class InspectionImport {
                 ? null
                 : SignOffOutcome.fromWire(Fields.needOneOf(reader, "outcome", OUTCOMES))
                         .orElseThrow();
-        return SignOff.build(new SignOffInput(id, pointId, packageId, extent, signedOn, by, read, note.orElse(null)));
+        LocalDate notice = Fields.optionalDate(reader, "notice given").orElse(null);
+        return SignOff.build(
+                new SignOffInput(id, pointId, packageId, extent, signedOn, by, read, note.orElse(null), notice));
     }
 
     /** Read a non conformance register export. */

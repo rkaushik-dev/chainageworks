@@ -6,6 +6,7 @@ import io.github.rkaushikdev.chainageworks.domain.chainage.ChainageRange;
 import io.github.rkaushikdev.chainageworks.domain.time.SiteDates;
 import io.github.rkaushikdev.chainageworks.util.Text;
 import java.time.LocalDate;
+import java.util.Optional;
 
 /**
  * One inspection actually carried out, over a stretch of the works.
@@ -22,6 +23,7 @@ import java.time.LocalDate;
  * @param by who signed it
  * @param outcome what the inspection found
  * @param note anything the inspector added
+ * @param noticeGivenOn when the engineer was given notice of the inspection, if the register says
  */
 public record SignOff(
         String id,
@@ -31,12 +33,43 @@ public record SignOff(
         LocalDate signedOn,
         String by,
         SignOffOutcome outcome,
-        String note) {
+        String note,
+        Optional<LocalDate> noticeGivenOn) {
 
-    /** Build a sign off, refusing one that names nobody as signing it. */
+    public SignOff {
+        noticeGivenOn = noticeGivenOn == null ? Optional.empty() : noticeGivenOn;
+    }
+
+    /** A sign off with no notice date on the register. */
+    public SignOff(
+            String id,
+            String pointId,
+            String packageId,
+            ChainageRange extent,
+            LocalDate signedOn,
+            String by,
+            SignOffOutcome outcome,
+            String note) {
+        this(id, pointId, packageId, extent, signedOn, by, outcome, note, Optional.empty());
+    }
+
+    /**
+     * Build a sign off, refusing one that names nobody as signing it, notice given after the
+     * inspection, and a record that nobody attended with no notice behind it.
+     */
     public static SignOff build(SignOffInput input) {
         if (Text.trim(input.by()).isEmpty()) {
             throw new BadInputException("a sign off has to name who signed it", Details.of("signOff", input.id()));
+        }
+        Optional<LocalDate> notice = Optional.ofNullable(input.noticeGivenOn());
+        if (notice.isPresent() && notice.get().isAfter(input.signedOn())) {
+            throw new BadInputException(
+                    "notice of an inspection cannot come after it", Details.of("signOff", input.id()));
+        }
+        if (input.outcome() == SignOffOutcome.NOT_ATTENDED && notice.isEmpty()) {
+            throw new BadInputException(
+                    "nobody can fail to attend an inspection they were never told about",
+                    Details.of("signOff", input.id()));
         }
         return new SignOff(
                 input.id(),
@@ -46,12 +79,32 @@ public record SignOff(
                 input.signedOn(),
                 Text.trim(input.by()),
                 input.outcome() == null ? SignOffOutcome.PASSED : input.outcome(),
-                input.note() == null ? "" : input.note());
+                input.note() == null ? "" : input.note(),
+                notice);
     }
 
-    /** A failed inspection is a record of an inspection, not a release. */
+    /** Clear days the engineer has to be given before an inspection nobody attends releases the work. */
+    public static final int NOTICE_DAYS = 1;
+
+    /**
+     * Whether the sign off lets the work go on. A failed inspection is a record of an inspection,
+     * not a release. One nobody attended releases the work only when the notice gave the engineer
+     * at least {@link #NOTICE_DAYS} to get there; notice on the morning itself is not notice.
+     */
     public boolean releases() {
-        return outcome != SignOffOutcome.FAILED;
+        return switch (outcome) {
+            case PASSED, PASSED_WITH_COMMENT -> true;
+            case FAILED -> false;
+            case NOT_ATTENDED ->
+                noticeGivenOn
+                        .map(on -> SiteDates.diffDays(on, signedOn) >= NOTICE_DAYS)
+                        .orElse(false);
+        };
+    }
+
+    /** True for a release that rests on the engineer not attending rather than on an inspection. */
+    public boolean isDeemed() {
+        return outcome == SignOffOutcome.NOT_ATTENDED && releases();
     }
 
     /** {@code IP-01 passed on 2025-03-10 by A Surveyor}, like a register line. */

@@ -21,6 +21,9 @@ import io.github.rkaushikdev.chainageworks.domain.delay.DelayCause;
 import io.github.rkaushikdev.chainageworks.domain.delay.DelayEvent;
 import io.github.rkaushikdev.chainageworks.domain.delay.DelayEventInput;
 import io.github.rkaushikdev.chainageworks.domain.itp.PointType;
+import io.github.rkaushikdev.chainageworks.domain.itp.SignOff;
+import io.github.rkaushikdev.chainageworks.domain.itp.SignOffInput;
+import io.github.rkaushikdev.chainageworks.domain.itp.SignOffOutcome;
 import io.github.rkaushikdev.chainageworks.domain.money.Currency;
 import io.github.rkaushikdev.chainageworks.domain.money.Money;
 import io.github.rkaushikdev.chainageworks.domain.money.Percent;
@@ -341,6 +344,21 @@ class JobCodecTest {
                     through(job).variations().require("VO-020").items().get(0);
             assertThat(again.proRata()).contains(new VariationItem.ProRata(ItemCode.parse("E423.1"), 2.5));
             assertThat(again.rate()).isEmpty();
+        }
+
+        @Test
+        void keepsTheNoticeBehindAnInspectionNobodyAttended() {
+            Job job = sampleJob();
+            SignOff any = job.signOffs().all().get(0);
+            job.signOffs()
+                    .put(SignOff.build(SignOffInput.of(
+                                    any.id(), any.pointId(), any.packageId(), any.extent(), any.signedOn(), "C Agent")
+                            .withOutcome(SignOffOutcome.NOT_ATTENDED)
+                            .withNoticeGivenOn(any.signedOn().minusDays(2))));
+            SignOff again = through(job).signOffs().require(any.id());
+            assertThat(again.outcome()).isEqualTo(SignOffOutcome.NOT_ATTENDED);
+            assertThat(again.noticeGivenOn()).contains(any.signedOn().minusDays(2));
+            assertThat(again.isDeemed()).isTrue();
         }
 
         @Test

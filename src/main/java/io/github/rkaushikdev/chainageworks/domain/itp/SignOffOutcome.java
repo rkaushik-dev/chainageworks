@@ -2,11 +2,18 @@ package io.github.rkaushikdev.chainageworks.domain.itp;
 
 import java.util.Optional;
 
-/** What an inspection found. */
+/**
+ * What an inspection found.
+ *
+ * <p>Not attended is the contractor's record that notice of the inspection was given and nobody
+ * came. On most contracts the work may then go ahead as if it had been inspected, because an
+ * engineer who stays away cannot also hold the job up, but only when the notice was given in time.
+ */
 public enum SignOffOutcome {
     PASSED("passed"),
     PASSED_WITH_COMMENT("passed_with_comment"),
-    FAILED("failed");
+    FAILED("failed"),
+    NOT_ATTENDED("not_attended");
 
     private final String wire;
 
