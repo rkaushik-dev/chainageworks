@@ -10,6 +10,7 @@ import io.github.rkaushikdev.chainageworks.domain.money.Percent;
 import io.github.rkaushikdev.chainageworks.domain.time.SiteDates;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -197,6 +198,22 @@ class AdjustmentTermsTest {
                             .amount()
                             .major())
                     .isEqualTo(-10_000);
+        }
+
+        @Test
+        void takesTheLowerOfTheCompletionDateAndCurrentFactorsOnceLate() {
+            PriceAdjustment held = TERMS.adjust(SERIES, gbp(100_000), d("2025-03-25"), Optional.of(d("2025-01-25")));
+            assertThat(held.heldAtCompletion()).isTrue();
+            assertThat(held.factor().asAt()).isEqualTo(d("2025-01-25"));
+            assertThat(held.amount().major()).isEqualTo(6750);
+            assertThat(held.asAt()).isEqualTo(d("2025-03-25"));
+        }
+
+        @Test
+        void ignoresACompletionDateStillAhead() {
+            PriceAdjustment current = TERMS.adjust(SERIES, gbp(100_000), d("2025-01-25"), Optional.of(d("2025-03-25")));
+            assertThat(current.heldAtCompletion()).isFalse();
+            assertThat(current).isEqualTo(TERMS.adjust(SERIES, gbp(100_000), d("2025-01-25")));
         }
 
         @Test

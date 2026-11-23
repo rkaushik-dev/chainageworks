@@ -218,6 +218,7 @@ public final class Dto {
         dto.set("amount", money(adjustment.amount()));
         dto.put("provisional", adjustment.provisional());
         dto.put("indicesReadAt", date(factor.indicesReadAt()));
+        dto.put("heldAtCompletion", adjustment.heldAtCompletion());
         dto.set("indices", array(factor.lines(), line -> {
             ObjectNode entry = Json.object();
             entry.put("indexId", line.indexId());

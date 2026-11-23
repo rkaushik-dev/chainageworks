@@ -8,6 +8,7 @@ import io.github.rkaushikdev.chainageworks.domain.time.SiteDates;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -121,9 +122,36 @@ public record AdjustmentTerms(LocalDate baseDate, Percent nonAdjustable, List<We
      * formula was allowed to touch.
      */
     public PriceAdjustment adjust(List<IndexSeries> series, Money base, LocalDate asAt) {
-        AdjustmentFactor factor = factorAt(series, asAt);
+        return adjust(series, base, asAt, Optional.empty());
+    }
+
+    /**
+     * What the formula adds to, or takes off, a valuation on a job that may be running late.
+     *
+     * <p>Once the completion date has passed, the contractor does not get to carry on collecting
+     * the market's movement for time it was not entitled to. The figures at the completion date
+     * are used instead of the current ones whenever they give the lower factor, which is the one
+     * more favourable to the employer. Falling indices still pass through, so a late contractor
+     * cannot shelter behind the freeze either.
+     *
+     * @param completionDue the completion date as extended, empty when the contract fixes none
+     */
+    public PriceAdjustment adjust(
+            List<IndexSeries> series, Money base, LocalDate asAt, Optional<LocalDate> completionDue) {
+        AdjustmentFactor current = factorAt(series, asAt);
+        Optional<AdjustmentFactor> held = completionDue
+                .filter(due -> due.isBefore(asAt))
+                .map(due -> factorAt(series, due))
+                .filter(atDue -> atDue.factor() < current.factor());
+        AdjustmentFactor factor = held.orElse(current);
         Money adjustable = base.scale(1 - nonAdjustable.fraction());
         return new PriceAdjustment(
-                asAt, base, adjustable, factor, adjustable.scale(factor.factor()), factor.provisional());
+                asAt,
+                base,
+                adjustable,
+                factor,
+                adjustable.scale(factor.factor()),
+                factor.provisional(),
+                held.isPresent());
     }
 }

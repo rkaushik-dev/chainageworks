@@ -14,9 +14,17 @@ import java.util.List;
  * @param factor the factor that was applied
  * @param amount what the formula adds, negative when the indices have fallen
  * @param provisional true while any figure behind it is still provisional
+ * @param heldAtCompletion true when the works were late and the figures at the completion date
+ *     were used because they came out lower than the current ones
  */
 public record PriceAdjustment(
-        LocalDate asAt, Money base, Money adjustable, AdjustmentFactor factor, Money amount, boolean provisional) {
+        LocalDate asAt,
+        Money base,
+        Money adjustable,
+        AdjustmentFactor factor,
+        Money amount,
+        boolean provisional,
+        boolean heldAtCompletion) {
 
     /** An adjustment of nothing, for a contract with no fluctuation clause. */
     public static PriceAdjustment none(Money base, LocalDate asAt) {
@@ -26,6 +34,7 @@ public record PriceAdjustment(
                 Money.zero(base.currency()),
                 new AdjustmentFactor(asAt, asAt, List.of(), 0, false),
                 Money.zero(base.currency()),
+                false,
                 false);
     }
 

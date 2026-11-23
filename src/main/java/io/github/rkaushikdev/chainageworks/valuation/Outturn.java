@@ -78,11 +78,21 @@ public record Outturn(
                 : DayworkSheet.dayworkValue(input.dayworkSchedule(), input.dayworkSheets(), input.asAt());
 
         Money permanentWork = account.forecastOutturn().plus(variations).plus(daywork);
+        Optional<CompletionTerms.Position> completion = completionAt(input);
         PriceAdjustment adjustment = input.adjustment() == null
                 ? PriceAdjustment.none(permanentWork, input.asAt())
-                : input.adjustment().adjust(input.indices(), permanentWork, input.asAt());
+                : input.adjustment()
+                        .adjust(
+                                input.indices(),
+                                permanentWork,
+                                input.asAt(),
+                                completion.map(CompletionTerms.Position::extendedCompletion));
 
-        Money damages = damagesAt(input, currency);
+        Money damages = completion
+                .map(position -> input.completion()
+                        .damages(position, input.contractSum(), input.asAt(), Optional.ofNullable(input.takenOverOn()))
+                        .amount())
+                .orElse(Money.zero(currency));
         Money total = permanentWork.plus(adjustment.amount()).minus(damages);
         Money movement = total.minus(input.contractSum());
 
@@ -100,14 +110,12 @@ public record Outturn(
                 Percent.share(movement, input.contractSum()));
     }
 
-    private static Money damagesAt(OutturnInput input, Currency currency) {
-        CompletionTerms terms = input.completion();
-        if (terms == null || input.calendar() == null) {
-            return Money.zero(currency);
+    /** Where completion stands at the input's date, empty without terms or a calendar to count on. */
+    private static Optional<CompletionTerms.Position> completionAt(OutturnInput input) {
+        if (input.completion() == null || input.calendar() == null) {
+            return Optional.empty();
         }
-        CompletionTerms.Position position = terms.position(input.delayEvents(), input.calendar(), input.asAt());
-        return terms.damages(position, input.contractSum(), input.asAt(), Optional.ofNullable(input.takenOverOn()))
-                .amount();
+        return Optional.of(input.completion().position(input.delayEvents(), input.calendar(), input.asAt()));
     }
 
     /**
@@ -115,12 +123,9 @@ public record Outturn(
      * contract fixes no completion date or no calendar is given.
      */
     public static int forecastDaysLate(OutturnInput input) {
-        CompletionTerms terms = input.completion();
-        if (terms == null || input.calendar() == null) {
-            return 0;
-        }
-        return terms.position(input.delayEvents(), input.calendar(), input.asAt())
-                .daysLate(input.asAt());
+        return completionAt(input)
+                .map(position -> position.daysLate(input.asAt()))
+                .orElse(0);
     }
 
     /** The parts of the outturn, in the order a final account letter sets them out. */

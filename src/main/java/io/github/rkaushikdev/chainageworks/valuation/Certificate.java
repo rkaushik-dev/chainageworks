@@ -106,9 +106,17 @@ public record Certificate(
         // purpose: they are paid at what the supplier invoiced, which already carries whatever the
         // market did, and running them through an index as well pays the same movement twice.
         Money permanentWork = measuredWork.plus(daywork);
+        Optional<CompletionTerms.Position> completion = Optional.ofNullable(input.completion())
+                .map(terms ->
+                        terms.position(input.delayEvents(), input.context().calendar(), asAt));
         PriceAdjustment adjustment = input.adjustment() == null
                 ? PriceAdjustment.none(permanentWork, asAt)
-                : input.adjustment().adjust(input.indices(), permanentWork, asAt);
+                : input.adjustment()
+                        .adjust(
+                                input.indices(),
+                                permanentWork,
+                                asAt,
+                                completion.map(CompletionTerms.Position::extendedCompletion));
 
         Money gross = measuredWork.plus(materialsOnSite).plus(daywork).plus(adjustment.amount());
 
@@ -127,7 +135,8 @@ public record Certificate(
         Optional<BondPosition> position = Optional.ofNullable(input.bond())
                 .map(bond -> bond.position(retention.held(), asAt, input.substantialCompletionOn()));
         Money retentionHeld = position.map(BondPosition::shortfall).orElse(retention.held());
-        Money damages = damagesAt(input, asAt, currency);
+        Money damages =
+                completion.map(standing -> damagesAt(input, standing, asAt)).orElse(Money.zero(currency));
         Money netValuation = gross.minus(retentionHeld).minus(damages);
 
         return new Certificate(
@@ -156,14 +165,9 @@ public record Certificate(
      * deduction to date and each month after pays only what accrued since. They stop on the day the
      * works are taken over, which is also the day nothing more is owed.
      */
-    private static Money damagesAt(CertificateInput input, LocalDate asAt, Currency currency) {
-        CompletionTerms terms = input.completion();
-        if (terms == null) {
-            return Money.zero(currency);
-        }
-        CompletionTerms.Position position =
-                terms.position(input.delayEvents(), input.context().calendar(), asAt);
-        return terms.damages(position, input.contractSum(), asAt, Optional.ofNullable(input.substantialCompletionOn()))
+    private static Money damagesAt(CertificateInput input, CompletionTerms.Position position, LocalDate asAt) {
+        return input.completion()
+                .damages(position, input.contractSum(), asAt, Optional.ofNullable(input.substantialCompletionOn()))
                 .amount();
     }
 
@@ -265,6 +269,9 @@ public record Certificate(
         }
         if (!damages.isZero()) {
             notes.add("liquidated damages are being deducted for late completion");
+        }
+        if (priceAdjustment.heldAtCompletion()) {
+            notes.add("the price adjustment is held at the completion date because the works are late");
         }
         if (bondHasLapsed()) {
             notes.add("the retention bond has lapsed and the cash is being held again");

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.byLessThan;
 
 import io.github.rkaushikdev.chainageworks.domain.bill.ItemCode;
+import io.github.rkaushikdev.chainageworks.domain.delay.CompletionTerms;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.AdjustmentTerms;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.IndexReading;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.IndexSeries;
@@ -140,6 +141,52 @@ class CertificateAdjustmentTest {
                     Certificate.build(BASE.withAdjustment(TERMS, List.of(FALLING)), MARCH, Money.zero(Currency.GBP));
             assertThat(down.priceAdjustment().amount().minor()).isNegative();
             assertThat(down.gross().major()).isLessThan(PLAIN.gross().major());
+        }
+    }
+
+    @Nested
+    class ACertificateOnALateJob {
+
+        private Certificate lateBy(String due, IndexSeries series) {
+            return Certificate.build(
+                    BASE.withAdjustment(TERMS, List.of(series))
+                            .withCompletion(CompletionTerms.build(d(due), gbp(0)), List.of()),
+                    MARCH,
+                    Money.zero(Currency.GBP));
+        }
+
+        @Test
+        void holdsTheFactorAtTheCompletionDateWhenTheIndicesHaveRisenSince() {
+            Certificate late = lateBy("2025-02-14", LABOUR);
+            assertThat(late.priceAdjustment().heldAtCompletion()).isTrue();
+            assertThat(late.priceAdjustment().factor().factor()).isCloseTo(0.09, byLessThan(5e-11));
+            assertThat(late.priceAdjustment().amount().minor())
+                    .isLessThan(ADJUSTED.priceAdjustment().amount().minor());
+            assertThat(late.notes())
+                    .contains("the price adjustment is held at the completion date because the works are late");
+        }
+
+        @Test
+        void letsAFallSinceTheCompletionDateThrough() {
+            IndexSeries falling = IndexSeries.build(
+                    "IDX-LAB",
+                    null,
+                    List.of(
+                            IndexReading.firm(2024, 10, 100),
+                            IndexReading.firm(2025, 2, 115),
+                            IndexReading.firm(2025, 3, 104)));
+            Certificate late = lateBy("2025-02-14", falling);
+            assertThat(late.priceAdjustment().heldAtCompletion()).isFalse();
+            assertThat(late.priceAdjustment().factor().factor()).isCloseTo(0.9 * 0.04, byLessThan(5e-11));
+        }
+
+        @Test
+        void usesTheCurrentFiguresWhileTheJobIsInsideItsTime() {
+            Certificate onTime = lateBy("2025-06-30", LABOUR);
+            assertThat(onTime.priceAdjustment().heldAtCompletion()).isFalse();
+            assertThat(onTime.priceAdjustment().amount())
+                    .isEqualTo(ADJUSTED.priceAdjustment().amount());
+            assertThat(ADJUSTED.priceAdjustment().heldAtCompletion()).isFalse();
         }
     }
 
