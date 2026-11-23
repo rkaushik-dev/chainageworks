@@ -83,6 +83,27 @@ public record Certificate(
      * @throws BadInputException when the previous figure is in another currency from the bill
      */
     public static Certificate build(CertificateInput input, ValuationPeriod period, Money previouslyCertified) {
+        return build(input, period, previouslyCertified, Optional.empty());
+    }
+
+    /**
+     * Value the works at the period's cut-off following on from the previous certificate, which a
+     * clause that adjusts each period's work needs as well as the net figure.
+     *
+     * @param previous the previous certificate in the series, empty for the first
+     */
+    public static Certificate following(
+            CertificateInput input, ValuationPeriod period, Optional<Certificate> previous) {
+        Money previouslyCertified = previous.map(Certificate::netValuation)
+                .orElse(Money.zero(input.contractSum().currency()));
+        return build(input, period, previouslyCertified, previous.map(Certificate::priceAdjustment));
+    }
+
+    private static Certificate build(
+            CertificateInput input,
+            ValuationPeriod period,
+            Money previouslyCertified,
+            Optional<PriceAdjustment> previousAdjustment) {
         LocalDate asAt = period.cutOff();
         Bill bill = input.context().billHistory().billAsAt(asAt);
         Currency currency = bill.currency();
@@ -112,7 +133,8 @@ public record Certificate(
         PriceAdjustment adjustment = input.adjustment() == null
                 ? PriceAdjustment.none(permanentWork, asAt)
                 : input.adjustment()
-                        .adjust(
+                        .adjustFrom(
+                                previousAdjustment,
                                 input.indices(),
                                 permanentWork,
                                 asAt,
@@ -177,11 +199,8 @@ public record Certificate(
      */
     public static List<Certificate> series(List<ValuationPeriod> periods, CertificateInput input) {
         List<Certificate> out = new ArrayList<>(periods.size());
-        Money previous = Money.zero(input.contractSum().currency());
         for (ValuationPeriod period : periods) {
-            Certificate certificate = build(input, period, previous);
-            out.add(certificate);
-            previous = certificate.netValuation();
+            out.add(following(input, period, out.isEmpty() ? Optional.empty() : Optional.of(out.get(out.size() - 1))));
         }
         return List.copyOf(out);
     }

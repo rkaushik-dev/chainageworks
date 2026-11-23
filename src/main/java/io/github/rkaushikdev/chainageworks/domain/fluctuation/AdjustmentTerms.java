@@ -20,8 +20,12 @@ import java.util.Set;
  * @param lagMonths how many months the current figures trail the valuation by. Most clauses read
  *     the index for a month or two before the one being valued, because that is the newest figure
  *     anybody can have when the certificate is due
+ * @param perPeriod true when the factor is applied to each period's work as it is valued, the way
+ *     a formula that adds the change in the price for work done since the last assessment works;
+ *     false when the whole cumulative valuation is moved by the current factor
  */
-public record AdjustmentTerms(LocalDate baseDate, Percent nonAdjustable, List<Weighting> weightings, int lagMonths) {
+public record AdjustmentTerms(
+        LocalDate baseDate, Percent nonAdjustable, List<Weighting> weightings, int lagMonths, boolean perPeriod) {
 
     public AdjustmentTerms {
         weightings = List.copyOf(weightings);
@@ -69,7 +73,7 @@ public record AdjustmentTerms(LocalDate baseDate, Percent nonAdjustable, List<We
             throw new BadInputException(
                     "the weightings and the fixed element have to come to 100", Details.of("total", total / 100.0));
         }
-        return new AdjustmentTerms(baseDate, fixed, weightings, lagMonths);
+        return new AdjustmentTerms(baseDate, fixed, weightings, lagMonths, false);
     }
 
     /**
@@ -110,7 +114,13 @@ public record AdjustmentTerms(LocalDate baseDate, Percent nonAdjustable, List<We
 
     /** The same clause with the current figures read {@code months} back. */
     public AdjustmentTerms withLagMonths(int months) {
-        return build(baseDate, nonAdjustable, weightings, months);
+        AdjustmentTerms lagged = build(baseDate, nonAdjustable, weightings, months);
+        return lagged.withPerPeriod(perPeriod);
+    }
+
+    /** The same clause applied to each period's work, or to the cumulative valuation. */
+    public AdjustmentTerms withPerPeriod(boolean other) {
+        return new AdjustmentTerms(baseDate, nonAdjustable, weightings, lagMonths, other);
     }
 
     /**
@@ -123,6 +133,40 @@ public record AdjustmentTerms(LocalDate baseDate, Percent nonAdjustable, List<We
      */
     public PriceAdjustment adjust(List<IndexSeries> series, Money base, LocalDate asAt) {
         return adjust(series, base, asAt, Optional.empty());
+    }
+
+    /**
+     * The adjustment to date, carrying on from the one the previous certificate reached.
+     *
+     * <p>A clause applied per period moves only the work valued since the last certificate, at this
+     * period's factor, and adds it to what earlier periods already collected. Work done last
+     * spring stays adjusted at last spring's index however far the market has moved since, which
+     * is what the contract priced; re-pricing the whole valuation every month would pay this
+     * month's rise on work that was finished before it happened.
+     *
+     * <p>A clause applied to the cumulative valuation ignores the previous figure entirely.
+     *
+     * @param previous the adjustment the previous certificate reached, empty on the first one
+     */
+    public PriceAdjustment adjustFrom(
+            Optional<PriceAdjustment> previous,
+            List<IndexSeries> series,
+            Money base,
+            LocalDate asAt,
+            Optional<LocalDate> completionDue) {
+        if (!perPeriod || previous.isEmpty()) {
+            return adjust(series, base, asAt, completionDue);
+        }
+        PriceAdjustment before = previous.get();
+        PriceAdjustment period = adjust(series, base.minus(before.base()), asAt, completionDue);
+        return new PriceAdjustment(
+                asAt,
+                base,
+                before.adjustable().plus(period.adjustable()),
+                period.factor(),
+                before.amount().plus(period.amount()),
+                before.provisional() || period.provisional(),
+                period.heldAtCompletion());
     }
 
     /**

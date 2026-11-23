@@ -17,6 +17,8 @@ import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.wholeNu
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.rkaushikdev.chainageworks.BadInputException;
+import io.github.rkaushikdev.chainageworks.Details;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.AdjustmentTerms;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.IndexReading;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.IndexSeries;
@@ -73,6 +75,9 @@ final class FluctuationCodec {
         if (terms.lagMonths() > 0) {
             json.put("lagMonths", terms.lagMonths());
         }
+        if (terms.perPeriod()) {
+            json.put("appliedTo", "period");
+        }
         return json;
     }
 
@@ -84,14 +89,29 @@ final class FluctuationCodec {
     private static AdjustmentTerms termsFromJson(JsonNode value) {
         JsonNode raw = objectFromJson(value, "price adjustment terms");
         return AdjustmentTerms.build(
-                dateFromJson(raw.path("baseDate")),
-                percentFromJson(orElse(raw.path("nonAdjustable"), 0)),
-                listFromJson(orElse(raw.path("weightings"), List.of()), "weightings", entry -> {
-                    JsonNode weighting = objectFromJson(entry, "weighting");
-                    return new Weighting(
-                            needString(weighting.path("indexId"), "index id"),
-                            percentFromJson(weighting.path("weight")));
-                }),
-                wholeNumber(raw.path("lagMonths"), "index lag", 0));
+                        dateFromJson(raw.path("baseDate")),
+                        percentFromJson(orElse(raw.path("nonAdjustable"), 0)),
+                        listFromJson(orElse(raw.path("weightings"), List.of()), "weightings", entry -> {
+                            JsonNode weighting = objectFromJson(entry, "weighting");
+                            return new Weighting(
+                                    needString(weighting.path("indexId"), "index id"),
+                                    percentFromJson(weighting.path("weight")));
+                        }),
+                        wholeNumber(raw.path("lagMonths"), "index lag", 0))
+                .withPerPeriod(appliedPerPeriod(raw.path("appliedTo")));
+    }
+
+    /** {@code period} or {@code cumulative}, cumulative when the clause does not say. */
+    private static boolean appliedPerPeriod(JsonNode value) {
+        String text = optionalString(value);
+        if (text.isEmpty() || text.equals("cumulative")) {
+            return false;
+        }
+        if (text.equals("period")) {
+            return true;
+        }
+        throw new BadInputException(
+                "a price adjustment applies to each period or to the cumulative valuation",
+                Details.of("appliedTo", text));
     }
 }

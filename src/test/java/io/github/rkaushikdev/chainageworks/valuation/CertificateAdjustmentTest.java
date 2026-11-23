@@ -10,6 +10,7 @@ import io.github.rkaushikdev.chainageworks.domain.delay.CompletionTerms;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.AdjustmentTerms;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.IndexReading;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.IndexSeries;
+import io.github.rkaushikdev.chainageworks.domain.fluctuation.PriceAdjustment;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.Weighting;
 import io.github.rkaushikdev.chainageworks.domain.money.Currency;
 import io.github.rkaushikdev.chainageworks.domain.money.Money;
@@ -20,6 +21,7 @@ import io.github.rkaushikdev.chainageworks.domain.time.CalendarInput;
 import io.github.rkaushikdev.chainageworks.domain.time.SiteCalendar;
 import io.github.rkaushikdev.chainageworks.progress.ProgressContext;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -216,6 +218,51 @@ class CertificateAdjustmentTest {
                     SERIES.stream().mapToDouble(c -> c.amountDue().major()).reduce(0, Double::sum);
             double cumulative = SERIES.get(SERIES.size() - 1).netValuation().major();
             assertThat(paid).isCloseTo(cumulative, byLessThan(0.005));
+        }
+    }
+
+    @Nested
+    class ASeriesAdjustedPeriodByPeriod {
+
+        private static final List<Certificate> CUMULATIVE =
+                Certificate.series(SCHEDULE.periods().subList(0, 4), BASE.withAdjustment(TERMS, List.of(LABOUR)));
+
+        private static final List<Certificate> SERIES = Certificate.series(
+                SCHEDULE.periods().subList(0, 4), BASE.withAdjustment(TERMS.withPerPeriod(true), List.of(LABOUR)));
+
+        @Test
+        void startsFromTheSameFirstCertificate() {
+            assertThat(SERIES.get(0).priceAdjustment())
+                    .isEqualTo(CUMULATIVE.get(0).priceAdjustment());
+        }
+
+        @Test
+        void addsOnlyThePeriodsOwnWorkAtThePeriodsOwnFactor() {
+            for (int i = 1; i < SERIES.size(); i++) {
+                PriceAdjustment before = SERIES.get(i - 1).priceAdjustment();
+                PriceAdjustment now = SERIES.get(i).priceAdjustment();
+                Money periodWork = now.base().minus(before.base());
+                Money expected = periodWork.scale(0.9).scale(now.factor().factor());
+                assertThat(now.amount().minus(before.amount())).isEqualTo(expected);
+                assertThat(now.base())
+                        .isEqualTo(
+                                SERIES.get(i).measuredWork().plus(SERIES.get(i).daywork()));
+            }
+        }
+
+        @Test
+        void staysProvisionalOnceAnyPeriodRestedOnAProvisionalFigure() {
+            assertThat(Certificate.provisional(SERIES).stream()
+                            .map(c -> c.period().number()))
+                    .containsExactly(3, 4);
+        }
+
+        @Test
+        void ignoresThePreviousFigureOnACumulativeClause() {
+            PriceAdjustment previous = SERIES.get(0).priceAdjustment();
+            assertThat(TERMS.adjustFrom(
+                            Optional.of(previous), List.of(LABOUR), gbp(10_000), MARCH.cutOff(), Optional.empty()))
+                    .isEqualTo(TERMS.adjust(List.of(LABOUR), gbp(10_000), MARCH.cutOff()));
         }
     }
 }

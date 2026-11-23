@@ -4,9 +4,11 @@ import static io.github.rkaushikdev.chainageworks.support.JobFixtures.commercial
 import static io.github.rkaushikdev.chainageworks.support.JobFixtures.fluctuatingJob;
 import static io.github.rkaushikdev.chainageworks.support.JobFixtures.sampleJob;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.byLessThan;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.rkaushikdev.chainageworks.config.Config;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.AdjustmentFactor;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.AdjustmentTerms;
@@ -16,6 +18,7 @@ import io.github.rkaushikdev.chainageworks.http.ApiClient;
 import io.github.rkaushikdev.chainageworks.ingest.ImportReport;
 import io.github.rkaushikdev.chainageworks.reporting.format.PlainText;
 import io.github.rkaushikdev.chainageworks.store.Job;
+import io.github.rkaushikdev.chainageworks.store.codec.JobCodec;
 import io.github.rkaushikdev.chainageworks.support.CliHarness;
 import io.github.rkaushikdev.chainageworks.support.CliHarness.Options;
 import io.github.rkaushikdev.chainageworks.support.CliHarness.Run;
@@ -223,10 +226,40 @@ class FluctuationsTest {
         }
 
         @Test
+        void keepsAClauseAppliedPeriodByPeriod() {
+            Job perPeriod = fluctuatingJob();
+            AdjustmentTerms terms = perPeriod.settings().adjustment().orElseThrow();
+            perPeriod.setSettings(perPeriod.settings().withAdjustment(terms.withPerPeriod(true)));
+            assertThat(clauseJson(perPeriod).path("appliedTo").asText()).isEqualTo("period");
+            Job again = JobDocuments.throughText(perPeriod);
+            assertThat(again.settings().adjustment().orElseThrow().perPeriod()).isTrue();
+            assertThat(clauseJson(fluctuatingJob()).has("appliedTo")).isFalse();
+        }
+
+        @Test
+        void readsACumulativeClauseAndRefusesAnythingElse() {
+            ObjectNode doc = JobCodec.toJson(fluctuatingJob());
+            ObjectNode clause = (ObjectNode) doc.path("settings").path("adjustment");
+            clause.put("appliedTo", "cumulative");
+            assertThat(JobCodec.fromJson(doc)
+                            .settings()
+                            .adjustment()
+                            .orElseThrow()
+                            .perPeriod())
+                    .isFalse();
+            clause.put("appliedTo", "quarter");
+            assertThatThrownBy(() -> JobCodec.fromJson(doc)).hasMessageContaining("each period");
+        }
+
+        @Test
         void carriesAJobWithNoClauseThroughAsNull() {
             Job again = JobDocuments.throughText(sampleJob());
             assertThat(again.settings().adjustment()).isEmpty();
             assertThat(again.indices().count()).isZero();
         }
+    }
+
+    private static JsonNode clauseJson(Job job) {
+        return JobCodec.toJson(job).path("settings").path("adjustment");
     }
 }

@@ -217,6 +217,24 @@ class AdjustmentTermsTest {
         }
 
         @Test
+        void leavesEarlierWorkAtTheFactorItWasDoneAtWhenAppliedPerPeriod() {
+            AdjustmentTerms perPeriod = TERMS.withPerPeriod(true);
+            PriceAdjustment january =
+                    perPeriod.adjustFrom(Optional.empty(), SERIES, gbp(100_000), d("2025-01-25"), Optional.empty());
+            assertThat(january.amount().major()).isEqualTo(6750);
+            PriceAdjustment march =
+                    perPeriod.adjustFrom(Optional.of(january), SERIES, gbp(150_000), d("2025-03-25"), Optional.empty());
+            assertThat(march.amount().major()).isEqualTo(6750 + 5737.5);
+            assertThat(march.adjustable().major()).isEqualTo(135_000);
+            assertThat(march.base().major()).isEqualTo(150_000);
+            assertThat(march.provisional()).isTrue();
+            assertThat(TERMS.adjust(SERIES, gbp(150_000), d("2025-03-25"))
+                            .amount()
+                            .major())
+                    .isEqualTo(17_212.5);
+        }
+
+        @Test
         void carriesTheProvisionalFlagThroughFromTheFactor() {
             assertThat(TERMS.adjust(SERIES, gbp(100_000), d("2025-03-25")).provisional())
                     .isTrue();
