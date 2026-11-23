@@ -4,7 +4,11 @@ import static io.github.rkaushikdev.chainageworks.support.ContextFixtures.d;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.rkaushikdev.chainageworks.domain.defects.CertificateBlock;
+import io.github.rkaushikdev.chainageworks.domain.defects.Defect;
+import io.github.rkaushikdev.chainageworks.domain.defects.DefectInput;
 import io.github.rkaushikdev.chainageworks.support.JobFixtures;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class DefectsReportTest {
@@ -44,6 +48,23 @@ class DefectsReportTest {
         DefectsReport after =
                 DefectsReport.build(JobFixtures.commercialJob().defects().all(), d("2025-06-30"), d("2025-07-01"));
         assertThat(after.render()).contains("certificate       safety defect open");
+    }
+
+    @Test
+    void showsThePeriodRunOnForDefectsThatShutTheWorks() {
+        List<Defect> defects =
+                new ArrayList<>(JobFixtures.commercialJob().defects().all());
+        defects.add(Defect.build(DefectInput.of(
+                        "DF-90", "DEF/2025/090", "WP-03", "joint failed, lane closed", d("2025-04-07"), d("2025-04-21"))
+                .withRectifiedOn(d("2025-04-16"))
+                .withPreventsUse(true)));
+        DefectsReport report = DefectsReport.build(defects, d("2025-06-30"), d("2025-06-30"));
+        assertThat(report.extendedBy()).isEqualTo(10);
+        assertThat(report.periodEnds()).isEqualTo(d("2025-07-10"));
+        assertThat(report.render()).contains("extended by       10 days out of use");
+        assertThat(report.block()).contains(CertificateBlock.PERIOD_NOT_ENDED);
+        assertThat(REPORT.extendedBy()).isZero();
+        assertThat(REPORT.render()).doesNotContain("extended by");
     }
 
     @Test

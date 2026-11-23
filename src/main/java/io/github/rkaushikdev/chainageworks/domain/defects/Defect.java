@@ -3,6 +3,7 @@ package io.github.rkaushikdev.chainageworks.domain.defects;
 import io.github.rkaushikdev.chainageworks.BadInputException;
 import io.github.rkaushikdev.chainageworks.Details;
 import io.github.rkaushikdev.chainageworks.domain.chainage.ChainageRange;
+import io.github.rkaushikdev.chainageworks.domain.time.DateRange;
 import io.github.rkaushikdev.chainageworks.domain.time.SiteCalendar;
 import io.github.rkaushikdev.chainageworks.domain.time.SiteDates;
 import io.github.rkaushikdev.chainageworks.util.Text;
@@ -27,6 +28,8 @@ import java.util.Optional;
  * @param raisedOn the day it was raised
  * @param dueBy the date the contract gives for putting it right
  * @param rectifiedOn the day it was put right, absent while it is outstanding
+ * @param preventsUse whether the defect kept the works out of the use they were built for, which is
+ *     what extends the defects period
  */
 public record Defect(
         String id,
@@ -38,7 +41,11 @@ public record Defect(
         Attribution attribution,
         LocalDate raisedOn,
         LocalDate dueBy,
-        Optional<LocalDate> rectifiedOn) {
+        Optional<LocalDate> rectifiedOn,
+        boolean preventsUse) {
+
+    /** However long the works are out of use, the defects period runs on for two years at most. */
+    public static final int MAX_EXTENSION_YEARS = 2;
 
     public Defect {
         extent = extent == null ? Optional.empty() : extent;
@@ -100,7 +107,8 @@ public record Defect(
                 input.attribution() == null ? Attribution.CONTRACTOR : input.attribution(),
                 input.raisedOn(),
                 input.dueBy(),
-                rectifiedOn);
+                rectifiedOn,
+                Boolean.TRUE.equals(input.preventsUse()));
     }
 
     /** Raised by {@code asAt} and not yet put right on that day. */
@@ -162,7 +170,7 @@ public record Defect(
      */
     public static Optional<CertificateBlock> certificateBlock(
             List<Defect> defects, LocalDate periodEnds, LocalDate asAt) {
-        if (asAt.isBefore(periodEnds)) {
+        if (asAt.isBefore(periodEndsAt(defects, periodEnds, asAt))) {
             return Optional.of(CertificateBlock.PERIOD_NOT_ENDED);
         }
         List<Defect> open = outstanding(defects, asAt);
@@ -176,6 +184,35 @@ public record Defect(
             return Optional.of(CertificateBlock.CONTRACTOR_DEFECTS_OPEN);
         }
         return Optional.empty();
+    }
+
+    /**
+     * Days the works were out of use because of defects raised within the period, counted once
+     * however many defects overlapped, up to a date.
+     *
+     * <p>The employer is entitled to the defects period it paid for on works it could actually
+     * use. A carriageway closed for a month while a failed joint is broken out and recast has not
+     * been on trial for that month, so the period runs on by the days it was shut.
+     */
+    public static int daysOutOfUse(List<Defect> defects, LocalDate periodEnds, LocalDate asAt) {
+        List<DateRange> shut = defects.stream()
+                .filter(defect -> defect.preventsUse()
+                        && !defect.raisedOn().isAfter(asAt)
+                        && !defect.raisedOn().isAfter(periodEnds))
+                .map(defect -> DateRange.of(
+                        defect.raisedOn(),
+                        defect.rectifiedOn().map(on -> SiteDates.min(on, asAt)).orElse(asAt)))
+                .toList();
+        return DateRange.union(shut).stream().mapToInt(DateRange::days).sum();
+    }
+
+    /**
+     * When the defects period ends once the days out of use are added, never more than {@link
+     * #MAX_EXTENSION_YEARS} past the end the contract set.
+     */
+    public static LocalDate periodEndsAt(List<Defect> defects, LocalDate periodEnds, LocalDate asAt) {
+        LocalDate extended = SiteDates.addDays(periodEnds, daysOutOfUse(defects, periodEnds, asAt));
+        return SiteDates.min(extended, SiteDates.addMonths(periodEnds, 12 * MAX_EXTENSION_YEARS));
     }
 
     public static boolean canIssueDefectsCertificate(List<Defect> defects, LocalDate periodEnds, LocalDate asAt) {

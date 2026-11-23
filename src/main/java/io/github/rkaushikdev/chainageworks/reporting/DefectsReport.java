@@ -22,7 +22,9 @@ import java.util.stream.Stream;
  * different things.
  *
  * @param asAt the date the position is taken at
- * @param periodEnds the day the defects period ends
+ * @param periodEnds the day the defects period ends, after any extension for works out of use
+ * @param extendedBy calendar days the period was extended by because defects kept the works out of
+ *     use
  * @param summary the list counted by state and severity
  * @param outstanding the open defects, soonest due first
  * @param overdue the open defects past their due date
@@ -31,6 +33,7 @@ import java.util.stream.Stream;
 public record DefectsReport(
         LocalDate asAt,
         LocalDate periodEnds,
+        int extendedBy,
         Defect.Summary summary,
         List<Defect> outstanding,
         List<Defect> overdue,
@@ -44,9 +47,11 @@ public record DefectsReport(
 
     /** The position of {@code defects} at {@code asAt}, against a period ending on {@code periodEnds}. */
     public static DefectsReport build(List<Defect> defects, LocalDate periodEnds, LocalDate asAt) {
+        LocalDate extended = Defect.periodEndsAt(defects, periodEnds, asAt);
         return new DefectsReport(
                 asAt,
-                periodEnds,
+                extended,
+                SiteDates.diffDays(periodEnds, extended),
                 Defect.summarise(defects, asAt),
                 Defect.outstanding(defects, asAt),
                 Defect.overdue(defects, asAt),
@@ -58,17 +63,21 @@ public record DefectsReport(
         List<String> sections = new ArrayList<>();
         sections.add(Table.heading("defects at " + SiteDates.format(asAt)));
         sections.add("");
-        sections.add(Table.pairs(List.of(
-                Map.entry("period ends", SiteDates.format(periodEnds)),
-                Map.entry("outstanding", String.valueOf(summary.outstanding())),
-                Map.entry("overdue", String.valueOf(summary.overdue())),
-                Map.entry("safety", String.valueOf(summary.bySeverity().get(DefectSeverity.SAFETY))),
-                Map.entry("major", String.valueOf(summary.bySeverity().get(DefectSeverity.MAJOR))),
-                Map.entry("minor", String.valueOf(summary.bySeverity().get(DefectSeverity.MINOR))),
-                Map.entry("cause not agreed", String.valueOf(summary.disputed())),
-                Map.entry(
-                        "certificate",
-                        block.map(b -> b.wire().replace('_', ' ')).orElse("can be issued")))));
+        List<Map.Entry<String, String>> pairs = new ArrayList<>();
+        pairs.add(Map.entry("period ends", SiteDates.format(periodEnds)));
+        // Only shown when a defect kept the works out of use, so an ordinary list reads as before.
+        if (extendedBy > 0) {
+            pairs.add(Map.entry("extended by", extendedBy + " days out of use"));
+        }
+        pairs.add(Map.entry("outstanding", String.valueOf(summary.outstanding())));
+        pairs.add(Map.entry("overdue", String.valueOf(summary.overdue())));
+        pairs.add(Map.entry("safety", String.valueOf(summary.bySeverity().get(DefectSeverity.SAFETY))));
+        pairs.add(Map.entry("major", String.valueOf(summary.bySeverity().get(DefectSeverity.MAJOR))));
+        pairs.add(Map.entry("minor", String.valueOf(summary.bySeverity().get(DefectSeverity.MINOR))));
+        pairs.add(Map.entry("cause not agreed", String.valueOf(summary.disputed())));
+        pairs.add(Map.entry(
+                "certificate", block.map(b -> b.wire().replace('_', ' ')).orElse("can be issued")));
+        sections.add(Table.pairs(pairs));
 
         if (!outstanding.isEmpty()) {
             sections.add("");

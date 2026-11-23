@@ -387,6 +387,7 @@ public final class Dto {
         ObjectNode dto = Json.object();
         dto.put("asAt", date(report.asAt()));
         dto.put("periodEnds", date(report.periodEnds()));
+        dto.put("extendedBy", report.extendedBy());
         dto.set("block", orNull(report.block(), block -> NODES.textNode(block.wire())));
         ObjectNode summary = Json.object();
         summary.put("outstanding", report.summary().outstanding());

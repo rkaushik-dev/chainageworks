@@ -228,6 +228,72 @@ class DefectTest {
     }
 
     @Nested
+    class WorksOutOfUse {
+
+        private final LocalDate ends = d("2026-11-01");
+
+        private final Defect closure = Defect.build(BASE.withId("DF-05")
+                .withSeverity(DefectSeverity.MAJOR)
+                .withDates(d("2026-03-02"), d("2026-03-16"))
+                .withRectifiedOn(d("2026-03-11"))
+                .withPreventsUse(true));
+
+        @Test
+        void runsThePeriodOnByTheDaysTheWorksWereShut() {
+            assertThat(Defect.daysOutOfUse(List.of(closure, MINOR), ends, d("2026-11-01")))
+                    .isEqualTo(10);
+            assertThat(Defect.periodEndsAt(List.of(closure), ends, d("2026-11-01")))
+                    .isEqualTo(d("2026-11-11"));
+            assertThat(Defect.certificateBlock(List.of(closure), ends, d("2026-11-05")))
+                    .contains(CertificateBlock.PERIOD_NOT_ENDED);
+        }
+
+        @Test
+        void countsOverlappingClosuresOnce() {
+            Defect second = Defect.build(BASE.withId("DF-06")
+                    .withDates(d("2026-03-09"), d("2026-03-20"))
+                    .withRectifiedOn(d("2026-03-13"))
+                    .withPreventsUse(true));
+            assertThat(Defect.daysOutOfUse(List.of(closure, second), ends, d("2026-11-01")))
+                    .isEqualTo(12);
+        }
+
+        @Test
+        void keepsCountingWhileTheWorksAreStillShut() {
+            Defect open = Defect.build(BASE.withId("DF-07")
+                    .withDates(d("2026-10-22"), d("2026-10-30"))
+                    .withPreventsUse(true));
+            assertThat(Defect.daysOutOfUse(List.of(open), ends, d("2026-10-31")))
+                    .isEqualTo(10);
+        }
+
+        @Test
+        void ignoresADefectRaisedAfterThePeriodRanOut() {
+            Defect late = Defect.build(BASE.withId("DF-08")
+                    .withDates(d("2026-11-03"), d("2026-11-10"))
+                    .withPreventsUse(true));
+            assertThat(Defect.daysOutOfUse(List.of(late), ends, d("2026-12-01")))
+                    .isZero();
+        }
+
+        @Test
+        void neverRunsThePeriodOnMoreThanTwoYears() {
+            Defect endless = Defect.build(BASE.withId("DF-09")
+                    .withDates(d("2025-11-03"), d("2025-12-01"))
+                    .withPreventsUse(true));
+            assertThat(Defect.periodEndsAt(List.of(endless), ends, d("2030-01-01")))
+                    .isEqualTo(d("2028-11-01"));
+        }
+
+        @Test
+        void leavesADefectThatKeptTheWorksInUseOutOfIt() {
+            assertThat(MINOR.preventsUse()).isFalse();
+            assertThat(Defect.periodEndsAt(List.of(MINOR, SAFETY), ends, d("2026-11-01")))
+                    .isEqualTo(ends);
+        }
+    }
+
+    @Nested
     class Describe {
 
         @Test

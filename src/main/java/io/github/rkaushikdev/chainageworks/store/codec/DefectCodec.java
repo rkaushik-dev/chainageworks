@@ -1,5 +1,6 @@
 package io.github.rkaushikdev.chainageworks.store.codec;
 
+import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.booleanFromJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.dateFromJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.dateToJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.needString;
@@ -49,6 +50,9 @@ final class DefectCodec {
         json.put("raisedOn", dateToJson(defect.raisedOn()));
         json.put("dueBy", dateToJson(defect.dueBy()));
         json.set("rectifiedOn", optionalDateToJson(defect.rectifiedOn()));
+        if (defect.preventsUse()) {
+            json.put("preventsUse", true);
+        }
         return json;
     }
 
@@ -64,6 +68,7 @@ final class DefectCodec {
                 oneOf(orElse(raw.path("attribution"), "contractor"), "defect attribution", Attribution::fromWire),
                 dateFromJson(raw.path("raisedOn")),
                 dateFromJson(raw.path("dueBy")),
-                optionalDateFromJson(raw.path("rectifiedOn")).orElse(null)));
+                optionalDateFromJson(raw.path("rectifiedOn")).orElse(null),
+                booleanFromJson(orElse(raw.path("preventsUse"), false), "out of use flag")));
     }
 }

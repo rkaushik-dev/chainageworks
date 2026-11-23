@@ -1,6 +1,7 @@
 package io.github.rkaushikdev.chainageworks.store.codec;
 
 import static io.github.rkaushikdev.chainageworks.support.ContextFixtures.d;
+import static io.github.rkaushikdev.chainageworks.support.JobFixtures.commercialJob;
 import static io.github.rkaushikdev.chainageworks.support.JobFixtures.sampleJob;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -14,6 +15,8 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import io.github.rkaushikdev.chainageworks.BadInputException;
 import io.github.rkaushikdev.chainageworks.domain.bill.BillRevision;
 import io.github.rkaushikdev.chainageworks.domain.bill.ItemCode;
+import io.github.rkaushikdev.chainageworks.domain.defects.Defect;
+import io.github.rkaushikdev.chainageworks.domain.defects.DefectInput;
 import io.github.rkaushikdev.chainageworks.domain.itp.PointType;
 import io.github.rkaushikdev.chainageworks.domain.money.Currency;
 import io.github.rkaushikdev.chainageworks.domain.money.Money;
@@ -232,6 +235,19 @@ class JobCodecTest {
                             .orElseThrow()
                             .repaymentRate())
                     .isEqualTo(AdvancePayment.DEFAULT_REPAYMENT_RATE);
+        }
+
+        @Test
+        void keepsADefectThatShutTheWorks() {
+            Job job = commercialJob();
+            job.defects()
+                    .add(Defect.build(DefectInput.of(
+                                    "DF-90", "DEF/2025/090", "WP-03", "lane closed", d("2025-04-07"), d("2025-04-21"))
+                            .withPreventsUse(true)));
+            Job again = through(job);
+            assertThat(again.defects().require("DF-90").preventsUse()).isTrue();
+            assertThat(again.defects().all().stream().filter(Defect::preventsUse))
+                    .hasSize(1);
         }
 
         @Test
