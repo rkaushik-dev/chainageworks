@@ -46,7 +46,8 @@ public record CompletionTerms(
      *
      * @param baseCompletion the completion date in the contract
      * @param extendedCompletion the date once the awards are added
-     * @param awardedDays working days granted by the events that were properly notified
+     * @param awardedDays working days granted by the events that were properly notified and held up
+     *     critical work
      * @param barredDays working days lost to events the time bar shut out
      * @param barred the barred events, one by one
      * @param concurrentDays working days two or more claimable events ran over together, counted
@@ -120,8 +121,7 @@ public record CompletionTerms(
      */
     public Position position(List<DelayEvent> events, SiteCalendar calendar, LocalDate asAt) {
         List<DelayEvent> started = DelayEvent.eventsTo(events, asAt);
-        Award award =
-                award(started.stream().filter(e -> e.isClaimable(noticeDays)).toList(), calendar);
+        Award award = award(started.stream().filter(e -> e.buysTime(noticeDays)).toList(), calendar);
         List<Barred> barred = started.stream()
                 .flatMap(event -> event.barReason(noticeDays).stream()
                         .map(reason -> new Barred(

@@ -24,6 +24,8 @@ import java.util.Optional;
  * @param packageIds the packages it held up
  * @param notifiedOn when the contractor gave notice; absent means they have not
  * @param awardedDays working days awarded by the engineer; absent while it is unassessed
+ * @param critical whether the work it held up was on the critical path; an event the float
+ *     absorbed delays nothing that matters to completion, so it buys money but no time
  */
 public record DelayEvent(
         String id,
@@ -34,7 +36,8 @@ public record DelayEvent(
         Optional<ChainageRange> extent,
         List<String> packageIds,
         Optional<LocalDate> notifiedOn,
-        Optional<Integer> awardedDays) {
+        Optional<Integer> awardedDays,
+        boolean critical) {
 
     /** Days the contract allows for giving notice before a claim is time barred. */
     public static final int DEFAULT_NOTICE_DAYS = 21;
@@ -79,7 +82,8 @@ public record DelayEvent(
                 Optional.ofNullable(input.extent()),
                 input.packageIds(),
                 notifiedOn,
-                awardedDays);
+                awardedDays,
+                input.critical() == null || input.critical());
     }
 
     /**
@@ -116,6 +120,15 @@ public record DelayEvent(
         return isClaimable(DEFAULT_NOTICE_DAYS);
     }
 
+    /**
+     * Whether the event moves the completion date at all: it has to be claimable and it has to have
+     * held up work on the critical path. Disruption to work with float is real cost and is still
+     * paid where the cause carries money, but it does not make the job finish any later.
+     */
+    public boolean buysTime(int noticeDays) {
+        return critical && isClaimable(noticeDays);
+    }
+
     public boolean carriesMoney(int noticeDays) {
         return isClaimable(noticeDays) && cause.entitlement() == Entitlement.TIME_AND_MONEY;
     }
@@ -142,7 +155,7 @@ public record DelayEvent(
      * honest about what is still to be argued.
      */
     public int assessedDays(SiteCalendar calendar, int noticeDays) {
-        if (!isClaimable(noticeDays)) {
+        if (!buysTime(noticeDays)) {
             return 0;
         }
         return awardedDays.orElseGet(() -> workingDaysLost(calendar));

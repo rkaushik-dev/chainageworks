@@ -116,4 +116,29 @@ class DelayReportTest {
         assertThat(takenOver.damages().minor())
                 .isLessThan(reportAt(d("2025-12-31")).damages().minor());
     }
+
+    @Test
+    void marksAnEventTheFloatAbsorbed() {
+        List<DelayEvent> events = new ArrayList<>(JOB.delayEvents().all());
+        events.add(DelayEvent.build(DelayEventInput.of(
+                        "DE-FL", "EW/2025/030", DelayCause.ACCESS, "side road closed", d("2025-03-17"), d("2025-03-19"))
+                .withNotifiedOn(d("2025-03-17"))
+                .withCritical(false)));
+        DelayReport report = DelayReport.build(
+                JOB.settings().completion().orElseThrow(),
+                events,
+                JOB.calendar(),
+                JOB.settings().contractSum(),
+                d("2025-03-25"));
+        assertThat(report.position().awardedDays()).isEqualTo(REPORT.position().awardedDays());
+        assertThat(report.lines())
+                .filteredOn(line -> line.id().equals("DE-FL"))
+                .singleElement()
+                .satisfies(line -> {
+                    assertThat(line.critical()).isFalse();
+                    assertThat(line.carriesMoney()).isTrue();
+                });
+        assertThat(report.render()).contains("off critical path");
+        assertThat(REPORT.render()).doesNotContain("off critical path");
+    }
 }

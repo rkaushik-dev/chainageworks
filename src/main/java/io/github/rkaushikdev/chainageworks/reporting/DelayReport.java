@@ -54,6 +54,7 @@ public record DelayReport(
      * @param awardedDays working days awarded; empty while it is unassessed
      * @param bar why the event cannot carry an award, empty when it can
      * @param carriesMoney whether the event carries money as well as time
+     * @param critical whether it held up work on the critical path, which is what buys time
      */
     public record DelayLine(
             String id,
@@ -65,7 +66,8 @@ public record DelayReport(
             int workingDays,
             Optional<Integer> awardedDays,
             Optional<BarReason> bar,
-            boolean carriesMoney) {
+            boolean carriesMoney,
+            boolean critical) {
 
         public DelayLine {
             awardedDays = awardedDays == null ? Optional.empty() : awardedDays;
@@ -107,7 +109,8 @@ public record DelayReport(
                         calendar.workingDaysIn(event.period()),
                         event.awardedDays(),
                         event.barReason(terms.noticeDays()),
-                        event.carriesMoney(terms.noticeDays())))
+                        event.carriesMoney(terms.noticeDays()),
+                        event.critical()))
                 .toList();
         return new DelayReport(asAt, lines, position, damages.days(), damages.amount(), damages.capped());
     }
@@ -171,7 +174,7 @@ public record DelayReport(
                                     line.awardedDays().map(String::valueOf).orElse(""),
                                     line.bar()
                                             .map(bar -> bar.wire().replace('_', ' '))
-                                            .orElse("claimable")))
+                                            .orElse(line.critical() ? "claimable" : "off critical path")))
                             .toList()));
         }
 

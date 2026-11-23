@@ -1,5 +1,6 @@
 package io.github.rkaushikdev.chainageworks.store.codec;
 
+import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.booleanFromJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.dateFromJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.dateToJson;
 import static io.github.rkaushikdev.chainageworks.store.codec.ValueCodec.listFromJson;
@@ -79,6 +80,9 @@ final class DelayCodec {
         json.set("packageIds", textsToJson(event.packageIds()));
         json.set("notifiedOn", optionalDateToJson(event.notifiedOn()));
         json.set("awardedDays", event.awardedDays().<JsonNode>map(Json::valueOf).orElse(NullNode.getInstance()));
+        if (!event.critical()) {
+            json.put("critical", false);
+        }
         return json;
     }
 
@@ -96,6 +100,7 @@ final class DelayCodec {
                         orElse(raw.path("packageIds"), List.of()), "package ids", id -> needString(id, "package id")),
                 optionalDateFromJson(raw.path("notifiedOn")).orElse(null),
                 optional(raw.path("awardedDays"), days -> wholeNumber(days, "awarded days"))
-                        .orElse(null)));
+                        .orElse(null),
+                booleanFromJson(orElse(raw.path("critical"), true), "critical path flag")));
     }
 }

@@ -190,6 +190,52 @@ class CompletionTermsTest {
     }
 
     @Nested
+    class OffTheCriticalPath {
+
+        private final DelayEvent floatAbsorbed = DelayEvent.build(DelayEventInput.of(
+                        "DE-20",
+                        "EW/2025/020",
+                        DelayCause.UTILITIES,
+                        "cable diversion on the side road",
+                        d("2025-06-02"),
+                        d("2025-06-06"))
+                .withNotifiedOn(d("2025-06-02"))
+                .withCritical(false));
+
+        @Test
+        void buysNoTimeForWorkTheFloatAbsorbed() {
+            CompletionTerms.Position position = TERMS.position(List.of(floatAbsorbed), CALENDAR, d("2025-06-30"));
+            assertThat(position.awardedDays()).isZero();
+            assertThat(position.extendedCompletion()).isEqualTo(TERMS.baseCompletion());
+            assertThat(floatAbsorbed.assessedDays(CALENDAR)).isZero();
+        }
+
+        @Test
+        void stillCarriesTheMoneyItsCauseIsEntitledTo() {
+            assertThat(floatAbsorbed.carriesMoney()).isTrue();
+            assertThat(floatAbsorbed.buysTime(21)).isFalse();
+            assertThat(floatAbsorbed.barReason()).isEmpty();
+        }
+
+        @Test
+        void leavesAnEngineersAwardOnANonCriticalEventOutOfTheExtension() {
+            DelayEvent awarded = DelayEvent.build(DelayEventInput.of(
+                            "DE-21",
+                            "EW/2025/021",
+                            DelayCause.DESIGN,
+                            "late drawings",
+                            d("2025-06-02"),
+                            d("2025-06-06"))
+                    .withNotifiedOn(d("2025-06-03"))
+                    .withAwardedDays(3)
+                    .withCritical(false));
+            assertThat(TERMS.position(List.of(awarded, NOTIFIED), CALENDAR, d("2025-06-30"))
+                            .awardedDays())
+                    .isEqualTo(8);
+        }
+    }
+
+    @Nested
     class DaysLateAndLiquidatedDamages {
 
         private final CompletionTerms.Position position = TERMS.position(List.of(NOTIFIED), CALENDAR, d("2025-12-31"));

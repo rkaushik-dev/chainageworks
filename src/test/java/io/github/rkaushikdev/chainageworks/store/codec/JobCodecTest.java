@@ -17,6 +17,9 @@ import io.github.rkaushikdev.chainageworks.domain.bill.BillRevision;
 import io.github.rkaushikdev.chainageworks.domain.bill.ItemCode;
 import io.github.rkaushikdev.chainageworks.domain.defects.Defect;
 import io.github.rkaushikdev.chainageworks.domain.defects.DefectInput;
+import io.github.rkaushikdev.chainageworks.domain.delay.DelayCause;
+import io.github.rkaushikdev.chainageworks.domain.delay.DelayEvent;
+import io.github.rkaushikdev.chainageworks.domain.delay.DelayEventInput;
 import io.github.rkaushikdev.chainageworks.domain.itp.PointType;
 import io.github.rkaushikdev.chainageworks.domain.money.Currency;
 import io.github.rkaushikdev.chainageworks.domain.money.Money;
@@ -299,6 +302,24 @@ class JobCodecTest {
             EarlyWarning again = through(job).earlyWarnings().require("EW-09");
             assertThat(again.quotation()).contains(Money.fromMajor(26_250, Currency.GBP));
             assertThat(again.expectedCost()).isEqualTo(Money.fromMajor(26_250, Currency.GBP));
+        }
+
+        @Test
+        void keepsADelayEventTheFloatAbsorbed() {
+            Job job = commercialJob();
+            job.delayEvents()
+                    .add(DelayEvent.build(DelayEventInput.of(
+                                    "DE-FL",
+                                    "EW/2025/030",
+                                    DelayCause.ACCESS,
+                                    "side road",
+                                    d("2025-03-17"),
+                                    d("2025-03-19"))
+                            .withCritical(false)));
+            Job again = through(job);
+            assertThat(again.delayEvents().require("DE-FL").critical()).isFalse();
+            assertThat(again.delayEvents().all().stream().filter(DelayEvent::critical))
+                    .hasSize(commercialJob().delayEvents().count());
         }
 
         @Test

@@ -377,6 +377,7 @@ public final class Dto {
             entry.set("awardedDays", orNull(line.awardedDays(), days -> NODES.numberNode(days.longValue())));
             entry.set("bar", orNull(line.bar(), bar -> NODES.textNode(bar.wire())));
             entry.put("carriesMoney", line.carriesMoney());
+            entry.put("critical", line.critical());
             return entry;
         }));
         return dto;
