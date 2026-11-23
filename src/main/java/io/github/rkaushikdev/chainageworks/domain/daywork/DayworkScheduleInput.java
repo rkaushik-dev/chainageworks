@@ -6,7 +6,8 @@ import java.util.List;
 
 /**
  * What a daywork schedule is built from. Any {@code null} takes the default: sterling, the
- * standard additions head by head, time and a half for overtime, and standing plant at half rate.
+ * standard additions head by head, time and a half for overtime, standing plant at half rate, and
+ * no deadline for handing sheets in.
  *
  * @param currency what the rates are in
  * @param labour the labour lines
@@ -16,6 +17,7 @@ import java.util.List;
  * @param materialsAddition the addition on materials
  * @param overtimeFactor what an hour outside normal working hours is worth, as a multiplier
  * @param standingFactor what an hour of plant standing idle is worth, as a share of its rate
+ * @param submissionDays calendar days after the work within which a sheet has to be handed in
  */
 public record DayworkScheduleInput(
         Currency currency,
@@ -25,7 +27,8 @@ public record DayworkScheduleInput(
         Percent plantAddition,
         Percent materialsAddition,
         Double overtimeFactor,
-        Double standingFactor) {
+        Double standingFactor,
+        Integer submissionDays) {
 
     public DayworkScheduleInput {
         labour = List.copyOf(labour);
@@ -34,38 +37,82 @@ public record DayworkScheduleInput(
 
     /** A sterling schedule with the standard additions and overtime factor. */
     public static DayworkScheduleInput of(List<DayworkRate> labour, List<DayworkRate> plant) {
-        return new DayworkScheduleInput(null, labour, plant, null, null, null, null, null);
+        return new DayworkScheduleInput(null, labour, plant, null, null, null, null, null, null);
     }
 
     public DayworkScheduleInput withCurrency(Currency other) {
-        return new DayworkScheduleInput(
-                other, labour, plant, labourAddition, plantAddition, materialsAddition, overtimeFactor, standingFactor);
+        Draft draft = new Draft(this);
+        draft.currency = other;
+        return draft.input();
     }
 
     public DayworkScheduleInput withLabourAddition(Percent other) {
-        return new DayworkScheduleInput(
-                currency, labour, plant, other, plantAddition, materialsAddition, overtimeFactor, standingFactor);
-    }
-
-    public DayworkScheduleInput withAdditions(DayworkAdditions other) {
-        return new DayworkScheduleInput(
-                currency,
-                labour,
-                plant,
-                other.labour(),
-                other.plant(),
-                other.materials(),
-                overtimeFactor,
-                standingFactor);
+        Draft draft = new Draft(this);
+        draft.labourAddition = other;
+        return draft.input();
     }
 
     public DayworkScheduleInput withOvertimeFactor(double other) {
-        return new DayworkScheduleInput(
-                currency, labour, plant, labourAddition, plantAddition, materialsAddition, other, standingFactor);
+        Draft draft = new Draft(this);
+        draft.overtimeFactor = other;
+        return draft.input();
     }
 
     public DayworkScheduleInput withStandingFactor(double other) {
-        return new DayworkScheduleInput(
-                currency, labour, plant, labourAddition, plantAddition, materialsAddition, overtimeFactor, other);
+        Draft draft = new Draft(this);
+        draft.standingFactor = other;
+        return draft.input();
+    }
+
+    public DayworkScheduleInput withSubmissionDays(int other) {
+        Draft draft = new Draft(this);
+        draft.submissionDays = other;
+        return draft.input();
+    }
+
+    public DayworkScheduleInput withAdditions(DayworkAdditions other) {
+        Draft draft = new Draft(this);
+        draft.labourAddition = other.labour();
+        draft.plantAddition = other.plant();
+        draft.materialsAddition = other.materials();
+        return draft.input();
+    }
+
+    /** A copy of the input with some fields changed, so each wither names only its own fields. */
+    private static final class Draft {
+        private Currency currency;
+        private List<DayworkRate> labour;
+        private List<DayworkRate> plant;
+        private Percent labourAddition;
+        private Percent plantAddition;
+        private Percent materialsAddition;
+        private Double overtimeFactor;
+        private Double standingFactor;
+        private Integer submissionDays;
+
+        private Draft(DayworkScheduleInput input) {
+            currency = input.currency;
+            labour = input.labour;
+            plant = input.plant;
+            labourAddition = input.labourAddition;
+            plantAddition = input.plantAddition;
+            materialsAddition = input.materialsAddition;
+            overtimeFactor = input.overtimeFactor;
+            standingFactor = input.standingFactor;
+            submissionDays = input.submissionDays;
+        }
+
+        private DayworkScheduleInput input() {
+            return new DayworkScheduleInput(
+                    currency,
+                    labour,
+                    plant,
+                    labourAddition,
+                    plantAddition,
+                    materialsAddition,
+                    overtimeFactor,
+                    standingFactor,
+                    submissionDays);
+        }
     }
 }

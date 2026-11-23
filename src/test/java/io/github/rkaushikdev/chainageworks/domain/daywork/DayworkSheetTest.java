@@ -225,6 +225,52 @@ class DayworkSheetTest {
     }
 
     @Nested
+    class HandingSheetsIn {
+
+        private final DayworkSchedule weekly = DayworkSchedule.build(DayworkScheduleInput.of(
+                        List.of(DayworkRate.of("ganger", "ganger", 24)),
+                        List.of(DayworkRate.of("excavator-13t", "13 tonne tracked excavator", 42)))
+                .withSubmissionDays(7));
+
+        @Test
+        void leavesASheetHandedInAfterTheDeadlineOffTheAccount() {
+            DayworkSheet late = DayworkSheet.build(BASE.withId("DW-04").withSubmittedOn(d("2025-03-24")));
+            assertThat(late.isLate(weekly)).isTrue();
+            assertThat(DayworkSheet.dayworkValue(weekly, List.of(late), d("2025-03-31"))
+                            .minor())
+                    .isZero();
+            assertThat(DayworkSheet.late(weekly, List.of(late, SHEET), d("2025-03-31")))
+                    .extracting(DayworkSheet::id)
+                    .containsExactly("DW-04");
+        }
+
+        @Test
+        void valuesASheetHandedInOnTheLastDay() {
+            DayworkSheet onTime = DayworkSheet.build(BASE.withSubmittedOn(d("2025-03-19")));
+            assertThat(onTime.isLate(weekly)).isFalse();
+            assertThat(DayworkSheet.dayworkValue(weekly, List.of(onTime), d("2025-03-31")))
+                    .isEqualTo(SHEET.value(weekly).total());
+        }
+
+        @Test
+        void takesTheSignatureAsTheDayItWentInWhenNothingElseIsRecorded() {
+            DayworkSheet signedLate = DayworkSheet.build(BASE.withSignedOn(d("2025-03-28")));
+            assertThat(signedLate.handedInOn()).contains(d("2025-03-28"));
+            assertThat(signedLate.isLate(weekly)).isTrue();
+            assertThat(signedLate.isLate(SCHEDULE)).isFalse();
+        }
+
+        @Test
+        void refusesADeadlineBelowNothingAndASheetHandedInBeforeTheWork() {
+            assertThatThrownBy(() -> DayworkSchedule.build(
+                            DayworkScheduleInput.of(List.of(), List.of()).withSubmissionDays(-1)))
+                    .hasMessageContaining("whole number of days");
+            assertThatThrownBy(() -> DayworkSheet.build(BASE.withSubmittedOn(d("2025-03-11"))))
+                    .hasMessageContaining("handed in before the work was done");
+        }
+    }
+
+    @Nested
     class DayworkValue {
 
         private final DayworkSheet later = DayworkSheet.build(BASE.withId("DW-02")

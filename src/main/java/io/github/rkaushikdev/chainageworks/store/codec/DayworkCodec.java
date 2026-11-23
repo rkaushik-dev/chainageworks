@@ -77,6 +77,7 @@ final class DayworkCodec {
         additions.put("plant", percentToJson(schedule.additions().plant()));
         additions.put("materials", percentToJson(schedule.additions().materials()));
         json.set("overtimeFactor", Json.number(schedule.overtimeFactor()));
+        schedule.submissionDays().ifPresent(days -> json.put("submissionDays", days));
         // Written only when the schedule departs from half rate, so an older file reads back as it was.
         if (schedule.standingFactor() != DayworkSchedule.DEFAULT_STANDING_FACTOR) {
             json.set("standingFactor", Json.number(schedule.standingFactor()));
@@ -100,7 +101,9 @@ final class DayworkCodec {
                 percentFromJson(additions.path("plant")),
                 percentFromJson(additions.path("materials")),
                 looseNumber(raw.path("overtimeFactor")),
-                isAbsent(raw.path("standingFactor")) ? null : looseNumber(raw.path("standingFactor"))));
+                isAbsent(raw.path("standingFactor")) ? null : looseNumber(raw.path("standingFactor")),
+                optional(raw.path("submissionDays"), days -> wholeNumber(days, "daywork submission days"))
+                        .orElse(null)));
     }
 
     static ObjectNode dayworkSheetToJson(DayworkSheet sheet) {
@@ -136,6 +139,7 @@ final class DayworkCodec {
             line.set("value", moneyToJson(entry.value()));
             return line;
         }));
+        sheet.submittedOn().ifPresent(on -> json.put("submittedOn", dateToJson(on)));
         return json;
     }
 
@@ -169,6 +173,7 @@ final class DayworkCodec {
                     JsonNode line = objectFromJson(entry, "material line");
                     return new MaterialEntry(
                             optionalString(line.path("description")), moneyFromJson(line.path("value")));
-                })));
+                }),
+                optionalDateFromJson(raw.path("submittedOn")).orElse(null)));
     }
 }

@@ -28,6 +28,8 @@ import java.util.Set;
  * @param additions the percentage on each head
  * @param overtimeFactor what an hour outside normal working hours is worth, as a multiplier
  * @param standingFactor what an hour of plant standing idle is worth, as a share of its rate
+ * @param submissionDays calendar days after the work within which a sheet has to be handed in,
+ *     empty when the contract sets no deadline
  */
 public record DayworkSchedule(
         Currency currency,
@@ -35,7 +37,8 @@ public record DayworkSchedule(
         List<DayworkRate> plant,
         DayworkAdditions additions,
         double overtimeFactor,
-        double standingFactor) {
+        double standingFactor,
+        Optional<Integer> submissionDays) {
 
     /** Plant standing idle is paid at half its working rate unless the schedule says otherwise. */
     public static final double DEFAULT_STANDING_FACTOR = 0.5;
@@ -43,6 +46,7 @@ public record DayworkSchedule(
     public DayworkSchedule {
         labour = List.copyOf(labour);
         plant = List.copyOf(plant);
+        submissionDays = submissionDays == null ? Optional.empty() : submissionDays;
     }
 
     /**
@@ -61,6 +65,12 @@ public record DayworkSchedule(
             throw new BadInputException(
                     "standing plant is paid at between none and all of its rate",
                     Details.of("standingFactor", standingFactor));
+        }
+        Optional<Integer> submissionDays = Optional.ofNullable(input.submissionDays());
+        if (submissionDays.isPresent() && submissionDays.get() < 0) {
+            throw new BadInputException(
+                    "a deadline for daywork sheets is a whole number of days",
+                    Details.of("submissionDays", submissionDays.get()));
         }
         for (List<DayworkRate> group : List.of(input.labour(), input.plant())) {
             Set<String> seen = new HashSet<>();
@@ -87,7 +97,8 @@ public record DayworkSchedule(
                 input.labourAddition() == null ? defaults.labour() : input.labourAddition(),
                 input.plantAddition() == null ? defaults.plant() : input.plantAddition(),
                 input.materialsAddition() == null ? defaults.materials() : input.materialsAddition());
-        return new DayworkSchedule(currency, input.labour(), input.plant(), additions, overtimeFactor, standingFactor);
+        return new DayworkSchedule(
+                currency, input.labour(), input.plant(), additions, overtimeFactor, standingFactor, submissionDays);
     }
 
     public Optional<DayworkRate> findLabourRate(String id) {

@@ -28,6 +28,8 @@ import java.util.Optional;
  * @param labour the gangs
  * @param plant the plant
  * @param materials the materials
+ * @param submittedOn the day the contractor handed the sheet in, absent when it went in with the
+ *     signature
  */
 public record DayworkSheet(
         String id,
@@ -39,10 +41,12 @@ public record DayworkSheet(
         String signedBy,
         List<LabourEntry> labour,
         List<PlantEntry> plant,
-        List<MaterialEntry> materials) {
+        List<MaterialEntry> materials,
+        Optional<LocalDate> submittedOn) {
 
     public DayworkSheet {
         signedOn = signedOn == null ? Optional.empty() : signedOn;
+        submittedOn = submittedOn == null ? Optional.empty() : submittedOn;
         labour = List.copyOf(labour);
         plant = List.copyOf(plant);
         materials = List.copyOf(materials);
@@ -104,6 +108,10 @@ public record DayworkSheet(
                     entry.hours() + entry.overtimeHours() + entry.standingHours(),
                     "a plant line's working and standing hours");
         }
+        if (input.submittedOn() != null && input.submittedOn().isBefore(input.workedOn())) {
+            throw new BadInputException(
+                    "a daywork sheet cannot be handed in before the work was done", Details.of("sheet", input.id()));
+        }
         if (input.labour().isEmpty()
                 && input.plant().isEmpty()
                 && input.materials().isEmpty()) {
@@ -120,7 +128,8 @@ public record DayworkSheet(
                 signedBy,
                 input.labour(),
                 input.plant(),
-                input.materials());
+                input.materials(),
+                Optional.ofNullable(input.submittedOn()));
     }
 
     /** Signed on or before the cut-off. A sheet signed later is next month's. */
@@ -164,15 +173,41 @@ public record DayworkSheet(
                 withLabour, withPlant, withMaterials, withLabour.plus(withPlant).plus(withMaterials));
     }
 
-    /** Everything signed by a cut-off, priced and added. */
+    /** The day the sheet went in: the day it was handed in, or failing that the day it was signed. */
+    public Optional<LocalDate> handedInOn() {
+        return submittedOn.or(() -> signedOn);
+    }
+
+    /**
+     * True when the sheet went in after the schedule's deadline.
+     *
+     * <p>The deadline exists because a daywork record can only be checked while the work is fresh.
+     * A sheet handed in three weeks late cannot be verified however honestly it was filled in, so it
+     * is left off the account even when somebody has since signed it.
+     */
+    public boolean isLate(DayworkSchedule schedule) {
+        return schedule.submissionDays()
+                .flatMap(days -> handedInOn().map(on -> SiteDates.diffDays(workedOn, on) > days))
+                .orElse(false);
+    }
+
+    /** Everything signed by a cut-off and handed in on time, priced and added. */
     public static Money dayworkValue(DayworkSchedule schedule, List<DayworkSheet> sheets, LocalDate asAt) {
-        List<DayworkSheet> signed =
-                sheets.stream().filter(sheet -> sheet.isSignedAt(asAt)).toList();
+        List<DayworkSheet> signed = sheets.stream()
+                .filter(sheet -> sheet.isSignedAt(asAt) && !sheet.isLate(schedule))
+                .toList();
         if (signed.isEmpty()) {
             return schedule.zero();
         }
         return Money.sum(
                 signed.stream().map(sheet -> sheet.value(schedule).total()).toList(), schedule.currency());
+    }
+
+    /** Sheets signed by a cut-off that were handed in too late to be valued. */
+    public static List<DayworkSheet> late(DayworkSchedule schedule, List<DayworkSheet> sheets, LocalDate asAt) {
+        return sheets.stream()
+                .filter(sheet -> sheet.isSignedAt(asAt) && sheet.isLate(schedule))
+                .toList();
     }
 
     /** Sheets that are still waiting on a signature, for the chase list. */

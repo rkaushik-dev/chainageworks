@@ -165,6 +165,36 @@ class DayworkAccountTest {
         }
 
         @Test
+        void keepsTheDeadlineAndTheDayASheetWentIn() {
+            Job job = jobWithDaywork();
+            job.setSettings(job.settings()
+                    .withDaywork(DayworkSchedule.build(DayworkScheduleInput.of(
+                                    List.of(DayworkRate.of("ganger", "ganger", 24)),
+                                    List.of(DayworkRate.of("excavator-13t", "13 tonne excavator", 42)))
+                            .withSubmissionDays(7))));
+            DayworkSheet sheet = job.dayworkSheets().require("DW-01");
+            job.dayworkSheets()
+                    .put(DayworkSheet.build(new DayworkSheetInput(
+                                    sheet.id(),
+                                    sheet.reference(),
+                                    sheet.packageId(),
+                                    sheet.instruction(),
+                                    sheet.workedOn(),
+                                    sheet.signedOn().orElseThrow(),
+                                    sheet.signedBy(),
+                                    sheet.labour(),
+                                    sheet.plant(),
+                                    sheet.materials())
+                            .withSubmittedOn(d("2025-03-25"))));
+            Job again = JobDocuments.throughText(job);
+            assertThat(again.settings().daywork().orElseThrow().submissionDays())
+                    .contains(7);
+            assertThat(again.dayworkSheets().require("DW-01").submittedOn()).contains(d("2025-03-25"));
+            assertThat(certificateFor(again, 3).daywork().minor()).isZero();
+            assertThat(certificateFor(jobWithDaywork(), 3).daywork().minor()).isPositive();
+        }
+
+        @Test
         void carriesAJobWithNoDayworkThroughAsNull() {
             Job again = JobDocuments.throughText(sampleJob());
             assertThat(again.settings().daywork()).isEmpty();
