@@ -211,7 +211,9 @@ public final class Service {
                 job.indices().all(),
                 settings.retentionBond().orElse(null),
                 settings.substantialCompletionOn().orElse(null),
-                settings.defectsCertificateOn().orElse(null));
+                settings.defectsCertificateOn().orElse(null),
+                settings.completion().orElse(null),
+                job.delayEvents().all());
     }
 
     /**

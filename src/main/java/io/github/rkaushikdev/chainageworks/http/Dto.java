@@ -202,6 +202,7 @@ public final class Dto {
         dto.set("retention", retention(certificate.retention()));
         dto.set("bond", orNull(certificate.bond(), Dto::bond));
         dto.set("retentionHeld", money(certificate.retentionHeld()));
+        dto.set("damages", money(certificate.damages()));
         dto.set("netValuation", money(certificate.netValuation()));
         dto.set("previouslyCertified", money(certificate.previouslyCertified()));
         dto.set("amountDue", money(certificate.amountDue()));

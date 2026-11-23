@@ -4,6 +4,7 @@ import io.github.rkaushikdev.chainageworks.BadInputException;
 import io.github.rkaushikdev.chainageworks.Details;
 import io.github.rkaushikdev.chainageworks.domain.bill.Bill;
 import io.github.rkaushikdev.chainageworks.domain.daywork.DayworkSheet;
+import io.github.rkaushikdev.chainageworks.domain.delay.CompletionTerms;
 import io.github.rkaushikdev.chainageworks.domain.fluctuation.PriceAdjustment;
 import io.github.rkaushikdev.chainageworks.domain.money.Currency;
 import io.github.rkaushikdev.chainageworks.domain.money.Money;
@@ -35,7 +36,10 @@ import java.util.Optional;
  * @param retention the retention account at the cut-off
  * @param bond where the bond stands against the cash, empty when there is no bond
  * @param retentionHeld the retention actually held in cash this month, after the bond
- * @param netValuation the gross less the retention held, which is what has been certified to date
+ * @param damages liquidated damages deducted to date, nothing when the job is not late or the
+ *     contract fixes no completion date
+ * @param netValuation the gross less the retention held and the damages, which is what has been
+ *     certified to date
  * @param previouslyCertified the net figure the previous certificate reached
  * @param amountDue what this certificate pays: the net valuation less the previous figure
  */
@@ -52,6 +56,7 @@ public record Certificate(
         RetentionState retention,
         Optional<BondPosition> bond,
         Money retentionHeld,
+        Money damages,
         Money netValuation,
         Money previouslyCertified,
         Money amountDue) {
@@ -122,7 +127,8 @@ public record Certificate(
         Optional<BondPosition> position = Optional.ofNullable(input.bond())
                 .map(bond -> bond.position(retention.held(), asAt, input.substantialCompletionOn()));
         Money retentionHeld = position.map(BondPosition::shortfall).orElse(retention.held());
-        Money netValuation = gross.minus(retentionHeld);
+        Money damages = damagesAt(input, asAt, currency);
+        Money netValuation = gross.minus(retentionHeld).minus(damages);
 
         return new Certificate(
                 period,
@@ -137,9 +143,28 @@ public record Certificate(
                 retention,
                 position,
                 retentionHeld,
+                damages,
                 netValuation,
                 previouslyCertified,
                 netValuation.minus(previouslyCertified));
+    }
+
+    /**
+     * Damages to date, deducted on the certificate rather than left for the final account.
+     *
+     * <p>Cumulative like every other figure on it, so the month the job goes late pays the
+     * deduction to date and each month after pays only what accrued since. They stop on the day the
+     * works are taken over, which is also the day nothing more is owed.
+     */
+    private static Money damagesAt(CertificateInput input, LocalDate asAt, Currency currency) {
+        CompletionTerms terms = input.completion();
+        if (terms == null) {
+            return Money.zero(currency);
+        }
+        CompletionTerms.Position position =
+                terms.position(input.delayEvents(), input.context().calendar(), asAt);
+        return terms.damages(position, input.contractSum(), asAt, Optional.ofNullable(input.substantialCompletionOn()))
+                .amount();
     }
 
     /**
@@ -220,6 +245,9 @@ public record Certificate(
         });
 
         lines.add(new Line("less retention", retentionHeld, false));
+        if (!damages.isZero()) {
+            lines.add(new Line("less liquidated damages", damages, false));
+        }
         lines.add(new Line("net valuation", netValuation, true));
         lines.add(new Line("less previously certified", previouslyCertified, false));
         lines.add(new Line("amount due this certificate", amountDue, true));
@@ -234,6 +262,9 @@ public record Certificate(
         }
         if (priceAdjustment.provisional()) {
             notes.add("the price adjustment rests on a provisional index figure");
+        }
+        if (!damages.isZero()) {
+            notes.add("liquidated damages are being deducted for late completion");
         }
         if (bondHasLapsed()) {
             notes.add("the retention bond has lapsed and the cash is being held again");

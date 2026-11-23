@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.rkaushikdev.chainageworks.domain.bill.ItemCode;
+import io.github.rkaushikdev.chainageworks.domain.delay.CompletionTerms;
 import io.github.rkaushikdev.chainageworks.domain.money.Currency;
 import io.github.rkaushikdev.chainageworks.domain.money.Money;
 import io.github.rkaushikdev.chainageworks.domain.money.Percent;
@@ -123,6 +124,53 @@ class CertificateTest {
             MaterialsOnSite built = MaterialsOnSite.build(fill().withIncorporatedOn(d("2025-03-20")));
             Certificate after = Certificate.build(BASE.withMaterials(List.of(built)), MARCH, Money.zero(Currency.GBP));
             assertThat(after.materialsOnSite().minor()).isZero();
+        }
+    }
+
+    @Nested
+    class LiquidatedDamagesOnTheCertificate {
+
+        private static final CertificateInput LATE =
+                BASE.withCompletion(CompletionTerms.build(d("2025-03-14"), gbp(100)), List.of());
+
+        @Test
+        void deductsTheDamagesToDateFromTheNetFigure() {
+            Certificate late = Certificate.build(LATE, MARCH, Money.zero(Currency.GBP));
+            assertThat(late.damages().major()).isEqualTo(1100);
+            assertThat(late.gross().major()).isEqualTo(16_152.5);
+            assertThat(late.netValuation().major()).isEqualTo(15_344.87 - 1100);
+            assertThat(late.lines()).contains(new Certificate.Line("less liquidated damages", gbp(1100), false));
+            assertThat(late.notes()).contains("liquidated damages are being deducted for late completion");
+        }
+
+        @Test
+        void leavesTheLineOffAJobThatIsNotLate() {
+            assertThat(CERTIFICATE.damages().minor()).isZero();
+            assertThat(CERTIFICATE.lines())
+                    .extracting(Certificate.Line::name)
+                    .doesNotContain("less liquidated damages");
+            Certificate early = Certificate.build(
+                    BASE.withCompletion(CompletionTerms.build(d("2025-06-30"), gbp(100)), List.of()),
+                    MARCH,
+                    Money.zero(Currency.GBP));
+            assertThat(early.damages().minor()).isZero();
+        }
+
+        @Test
+        void stopsDeductingOnTheDayTheWorksWereTakenOver() {
+            Certificate takenOver = Certificate.build(
+                    LATE.withSubstantialCompletionOn(d("2025-03-20")), MARCH, Money.zero(Currency.GBP));
+            assertThat(takenOver.damages().major()).isEqualTo(600);
+        }
+
+        @Test
+        void paysOnlyTheDamagesThatAccruedSinceTheLastCertificate() {
+            List<Certificate> series = Certificate.series(SCHEDULE.periods().subList(0, 4), LATE);
+            Certificate march = series.get(2);
+            Certificate april = series.get(3);
+            assertThat(april.damages().minus(march.damages()).major()).isEqualTo(3100);
+            assertThat(april.previouslyCertified()).isEqualTo(march.netValuation());
+            assertThat(april.amountDue()).isEqualTo(april.netValuation().minus(march.netValuation()));
         }
     }
 
