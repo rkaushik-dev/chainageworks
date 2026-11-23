@@ -6,6 +6,7 @@ import java.util.Optional;
 public enum NotClaimableReason {
     NOT_DELIVERED("not_delivered"),
     NOT_VESTED("not_vested"),
+    OFF_SITE_UNBONDED("off_site_unbonded"),
     NOT_PROTECTED("not_protected"),
     INCORPORATED("incorporated");
 

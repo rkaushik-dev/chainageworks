@@ -113,6 +113,35 @@ class MaterialsOnSiteTest {
                     MaterialsOnSite.build(BASE.withVestedOn(null).withProtectedOnSite(false));
             assertThat(nothing.reasonNotClaimable(d("2025-03-01"))).contains(NotClaimableReason.NOT_DELIVERED);
         }
+
+        @Test
+        void refusesALotHeldOffSiteUntilABondStandsBehindIt() {
+            MaterialsOnSite yard = MaterialsOnSite.build(BASE.withStoredOffSite("Wexham precast works", null));
+            assertThat(yard.isOffSite()).isTrue();
+            assertThat(yard.reasonNotClaimable(CUT_OFF)).contains(NotClaimableReason.OFF_SITE_UNBONDED);
+            MaterialsOnSite bonded =
+                    MaterialsOnSite.build(BASE.withStoredOffSite("Wexham precast works", "BOND/OS/014"));
+            assertThat(bonded.bondReference()).contains("BOND/OS/014");
+            assertThat(bonded.reasonNotClaimable(CUT_OFF)).isEmpty();
+            assertThat(MaterialsOnSite.value(List.of(yard, bonded), CUT_OFF, Currency.GBP)
+                            .major())
+                    .isEqualTo(34_560);
+        }
+
+        @Test
+        void asksForTitleBeforeItAsksForTheBond() {
+            MaterialsOnSite yard =
+                    MaterialsOnSite.build(BASE.withVestedOn(null).withStoredOffSite("Wexham precast works", null));
+            assertThat(yard.reasonNotClaimable(CUT_OFF)).contains(NotClaimableReason.NOT_VESTED);
+        }
+
+        @Test
+        void treatsABlankStoreAsOnSite() {
+            MaterialsOnSite blank = MaterialsOnSite.build(BASE.withStoredOffSite("  ", " "));
+            assertThat(blank.isOffSite()).isFalse();
+            assertThat(blank.bondReference()).isEmpty();
+            assertThat(MaterialsInput.from(blank)).isEqualTo(MaterialsInput.from(PIPES));
+        }
     }
 
     @Nested
@@ -244,6 +273,14 @@ class MaterialsOnSiteTest {
 
     @Nested
     class DescribeMaterials {
+
+        @Test
+        void saysWhereALotOffSiteIsHeld() {
+            assertThat(MaterialsOnSite.build(BASE.withStoredOffSite("Wexham precast works", "BOND/OS/014"))
+                            .describe())
+                    .isEqualTo("MOS-01 900 mm concrete pipe, 240 m delivered to the compound,"
+                            + " held at Wexham precast works from 2025-03-10");
+        }
 
         @Test
         void readsLikeAScheduleLine() {

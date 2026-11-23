@@ -169,6 +169,17 @@ class JobCodecTest {
                                     gbp(9000),
                                     d("2025-03-10"))
                             .withVestedOn(d("2025-03-12"))));
+            job.materials()
+                    .add(MaterialsOnSite.build(MaterialsInput.of(
+                                    "MOS-02",
+                                    "WP-02",
+                                    ItemCode.parse("E423.1"),
+                                    "geotextile rolls",
+                                    Quantity.of(40, Unit.NR),
+                                    gbp(2000),
+                                    d("2025-03-10"))
+                            .withVestedOn(d("2025-03-12"))
+                            .withStoredOffSite("supplier yard, Thame", "BOND/OS/002")));
             job.variations()
                     .add(Variation.build(VariationInput.of(
                                     "VO-012",
@@ -183,6 +194,9 @@ class JobCodecTest {
                             .withInstructedOn(d("2025-03-14"))));
             Job again = through(job);
             assertThat(again.materials().require("MOS-01").description()).isEqualTo("imported fill");
+            assertThat(again.materials().require("MOS-01").isOffSite()).isFalse();
+            assertThat(again.materials().require("MOS-02").storedAt()).contains("supplier yard, Thame");
+            assertThat(again.materials().require("MOS-02").bondReference()).contains("BOND/OS/002");
             assertThat(again.variations().require("VO-012").items().get(0).basis())
                     .isEqualTo(ValuationBasis.STAR_RATE);
         }

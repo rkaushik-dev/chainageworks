@@ -386,6 +386,8 @@ final class WorksCodec {
         json.set("vestedOn", optionalDateToJson(materials.vestedOn()));
         json.set("incorporatedOn", optionalDateToJson(materials.incorporatedOn()));
         json.put("protectedOnSite", materials.protectedOnSite());
+        materials.storedAt().ifPresent(place -> json.put("storedAt", place));
+        materials.bondReference().ifPresent(bond -> json.put("bondReference", bond));
         return json;
     }
 
@@ -401,7 +403,11 @@ final class WorksCodec {
                 dateFromJson(raw.path("deliveredOn")),
                 optionalDateFromJson(raw.path("vestedOn")).orElse(null),
                 optionalDateFromJson(raw.path("incorporatedOn")).orElse(null),
-                booleanFromJson(orElse(raw.path("protectedOnSite"), true), "protectedOnSite")));
+                booleanFromJson(orElse(raw.path("protectedOnSite"), true), "protectedOnSite"),
+                optional(raw.path("storedAt"), place -> needString(place, "store"))
+                        .orElse(null),
+                optional(raw.path("bondReference"), bond -> needString(bond, "bond reference"))
+                        .orElse(null)));
     }
 
     static ObjectNode variationToJson(Variation variation) {

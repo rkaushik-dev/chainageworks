@@ -36,6 +36,8 @@ import java.util.stream.Collectors;
  * @param vestedOn when title passed to the employer, if it has
  * @param incorporatedOn when it stopped being unfixed material and became part of the works
  * @param protectedOnSite whether it is stored and protected
+ * @param storedAt where a lot held off site is kept, empty when it is on site
+ * @param bondReference the bond securing a lot held off site, empty when there is none
  */
 public record MaterialsOnSite(
         String id,
@@ -47,7 +49,16 @@ public record MaterialsOnSite(
         LocalDate deliveredOn,
         Optional<LocalDate> vestedOn,
         Optional<LocalDate> incorporatedOn,
-        boolean protectedOnSite) {
+        boolean protectedOnSite,
+        Optional<String> storedAt,
+        Optional<String> bondReference) {
+
+    public MaterialsOnSite {
+        vestedOn = vestedOn == null ? Optional.empty() : vestedOn;
+        incorporatedOn = incorporatedOn == null ? Optional.empty() : incorporatedOn;
+        storedAt = storedAt == null ? Optional.empty() : storedAt;
+        bondReference = bondReference == null ? Optional.empty() : bondReference;
+    }
 
     /** What a contract usually allows against the invoice value. */
     public static final Percent DEFAULT_ALLOWANCE = Percent.of(90);
@@ -104,7 +115,9 @@ public record MaterialsOnSite(
                 input.deliveredOn(),
                 vestedOn,
                 incorporatedOn,
-                input.protectedOnSite() == null || input.protectedOnSite());
+                input.protectedOnSite() == null || input.protectedOnSite(),
+                Optional.ofNullable(input.storedAt()).map(Text::trim).filter(text -> !text.isEmpty()),
+                Optional.ofNullable(input.bondReference()).map(Text::trim).filter(text -> !text.isEmpty()));
     }
 
     /**
@@ -118,6 +131,9 @@ public record MaterialsOnSite(
         if (vestedOn.isEmpty() || SiteDates.compare(vestedOn.get(), asAt) > 0) {
             return Optional.of(NotClaimableReason.NOT_VESTED);
         }
+        if (isOffSite() && bondReference.isEmpty()) {
+            return Optional.of(NotClaimableReason.OFF_SITE_UNBONDED);
+        }
         if (!protectedOnSite) {
             return Optional.of(NotClaimableReason.NOT_PROTECTED);
         }
@@ -125,6 +141,17 @@ public record MaterialsOnSite(
             return Optional.of(NotClaimableReason.INCORPORATED);
         }
         return Optional.empty();
+    }
+
+    /**
+     * True for a lot held at a supplier's yard or a precast works rather than on site.
+     *
+     * <p>Such a lot can be certified like any other, but only once a bond stands behind it. The
+     * employer has paid for something it cannot see, on somebody else's premises, and the bond is
+     * what it falls back on when the supplier fails with the employer's materials still inside.
+     */
+    public boolean isOffSite() {
+        return storedAt.isPresent();
     }
 
     public boolean isClaimableAt(LocalDate asAt) {
@@ -214,8 +241,12 @@ public record MaterialsOnSite(
                         .toList());
     }
 
-    /** {@code MOS-01 900 mm concrete pipe, delivered 2025-03-10}. */
+    /**
+     * {@code MOS-01 900 mm concrete pipe, delivered 2025-03-10}, or {@code held at the precast works
+     * from 2025-03-10} for a lot off site.
+     */
     public String describe() {
-        return id + " " + description + ", delivered " + SiteDates.format(deliveredOn);
+        String where = storedAt.map(place -> ", held at " + place + " from ").orElse(", delivered ");
+        return id + " " + description + where + SiteDates.format(deliveredOn);
     }
 }
